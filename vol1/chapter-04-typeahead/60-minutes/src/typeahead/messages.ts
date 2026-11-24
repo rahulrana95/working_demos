@@ -19,5 +19,5 @@ export const DEFAULT_MESSAGES: TypeaheadMessages = {
   noResults: (query) => `No results for “${query}”`,
   error: "Something went wrong.",
   retry: "Try again",
-  resultsAvailable: (count) => `${count} results available`,
+  resultsAvailable: (count) => (count === 1 ? "1 result available" : `${count} results available`),
 };

@@ -164,7 +164,10 @@ export function Typeahead<T>({
       return "Searching";
     }
     if (status === "success") {
-      return items.length === 0 ? "No results found" : `${items.length} results available`;
+      if (items.length === 0) {
+        return "No results found";
+      }
+      return items.length === 1 ? "1 result available" : `${items.length} results available`;
     }
     return "";
   }

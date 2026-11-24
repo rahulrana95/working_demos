@@ -517,3 +517,13 @@ describe("Typeahead: at scale", () => {
     expect(document.getElementById(activeId)).toHaveTextContent("City 0");
   });
 });
+
+describe("Typeahead: wording", () => {
+  it("says “1 result”, not “1 results”, when there is one item", async () => {
+    const { type } = renderTypeahead(vi.fn().mockResolvedValue(["Mumbai"]));
+
+    await typeAndWait(type, "mum");
+
+    expect(screen.getByRole("status")).toHaveTextContent("1 result available");
+  });
+});
