@@ -2,19 +2,20 @@
 
 Working code for the book **Master System Design for Frontend Engineers**.
 
-Every piece of code printed in the book lives here, with tests. Each chapter is a
-separate project, so you can run one chapter without installing the others.
+Every piece of code printed in the book lives here, with tests. Each folder in
+the table is a separate project, so you can run one without installing the others.
 
 ## Volume 1
 
-| Chapter | Topic     | Folder                                                   |
-| ------- | --------- | -------------------------------------------------------- |
-| 4       | Typeahead | [`vol1/chapter-04-typeahead`](vol1/chapter-04-typeahead) |
+| Chapter | Topic                                    | Folder                                                                         |
+| ------- | ---------------------------------------- | ------------------------------------------------------------------------------ |
+| 4       | Typeahead: the senior answer, 45 minutes | [`vol1/chapter-04-typeahead/45-minutes`](vol1/chapter-04-typeahead/45-minutes) |
+| 4       | Typeahead: the staff answer, 60 minutes  | [`vol1/chapter-04-typeahead/60-minutes`](vol1/chapter-04-typeahead/60-minutes) |
 
 ## Run any chapter
 
 ```bash
-cd vol1/chapter-04-typeahead
+cd vol1/chapter-04-typeahead/45-minutes
 npm install
 npm test
 npm run dev

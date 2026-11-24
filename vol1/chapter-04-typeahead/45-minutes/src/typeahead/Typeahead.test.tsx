@@ -401,6 +401,34 @@ describe("Typeahead: keyboard", () => {
 
     expect(getActiveOptionText(input)).toBeNull();
   });
+
+  it("does nothing harmful on arrow keys when the list is empty", async () => {
+    const search = vi.fn().mockResolvedValue([]);
+    const { input, type, press, onSelect } = renderTypeahead(search);
+    await typeAndWait(type, "zzz");
+
+    press("ArrowDown");
+    press("ArrowUp");
+    press("Enter");
+
+    expect(input).not.toHaveAttribute("aria-activedescendant");
+    expect(screen.getByText("No results for “zzz”")).toBeVisible();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("does nothing harmful on arrow keys when the list shows an error", async () => {
+    const search = vi.fn().mockRejectedValue(new Error("Server is down"));
+    const { input, type, press, onSelect } = renderTypeahead(search);
+    await typeAndWait(type, "mum");
+
+    press("ArrowDown");
+    press("ArrowUp");
+    press("Enter");
+
+    expect(input).not.toHaveAttribute("aria-activedescendant");
+    expect(screen.getByRole("alert")).toHaveTextContent("Something went wrong.");
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });
 
 describe("Typeahead: mouse and focus", () => {

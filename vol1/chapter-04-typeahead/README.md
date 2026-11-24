@@ -2,76 +2,33 @@
 
 The user types in a box, and we show matching suggestions from a server.
 
-**Live demo:** see the link in the repository description.
+This chapter has two answers to the same question. Each one is a separate
+project, so you can run them side by side and compare the code.
 
-## Run it
+| Folder                     | Level  | What it is                                                                                        |
+| -------------------------- | ------ | ------------------------------------------------------------------------------------------------- |
+| [`45-minutes`](45-minutes) | Senior | A typeahead that is correct and fast: debounce, abort, cache, keyboard and screen reader support. |
+| [`60-minutes`](60-minutes) | Staff  | The same code, plus what other teams need before they can reuse it.                               |
 
-You need Node.js 20 or newer.
-
-```bash
-npm install
-```
-
-```bash
-npm test
-```
+Start with `45-minutes`. Then compare the two folders to see only the additions:
 
 ```bash
-npm run dev
+git diff --no-index 45-minutes/src 60-minutes/src
 ```
 
-Then open the address that the last command prints, usually `http://localhost:5173`.
+## What the extra 15 minutes buys
 
-## What is part of the interview
+The 45-minute answer works well on one page, for one team. The 60-minute answer
+is a component that a form library, a design system or a team in another
+country can use without changing its code.
 
-Every file says on its first lines whether you would write it in the interview.
+| Addition                                                                                           | Why it matters                                                                                                           | Minutes |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------- |
+| Controlled value (`value`, `onValueChange`) and form props (`name`, `disabled`, `required`, `ref`) | A form library can own the text, reset it, validate it and focus the input. The value is sent with a normal form submit. | 4       |
+| `renderItem`                                                                                       | Each team draws its own row (two lines, an icon, bold text) without a fork of the component.                             | 2       |
+| `messages`                                                                                         | Every text the user reads or hears can be translated. No English is fixed in the component.                              | 3       |
+| Cache expiry (`cacheTtlMs`) and `maxQueryLength`                                                   | A page that stays open all day does not show old answers. A very long pasted text never reaches the server.              | 3       |
+| `className` and logical CSS properties                                                             | The parent can place and style the component. The layout mirrors itself in right-to-left languages.                      | 3       |
 
-| File                            | In the interview? | Time       |
-| ------------------------------- | ----------------- | ---------- |
-| `src/typeahead/types.ts`        | Yes               | 1 minute   |
-| `src/typeahead/useTypeahead.ts` | Yes               | 15 minutes |
-| `src/typeahead/lruCache.ts`     | Yes               | 4 minutes  |
-| `src/typeahead/Typeahead.tsx`   | Yes               | 20 minutes |
-| `*.test.ts`, `*.test.tsx`       | No                |            |
-| `src/App.tsx`, `src/api/`       | No                |            |
-| `src/styles.css`                | No                |            |
-
-That is about 40 minutes of typing for someone who has practised it. The other
-5 minutes go to walking the interviewer through one race condition.
-
-## Why it holds at scale
-
-| Pressure                     | What protects us                                     | Test that proves it                                                 |
-| ---------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------- |
-| The user types very fast     | Debounce: one request after the user pauses          | `sends one request when the user types 200 characters`              |
-| An old response arrives late | The old request is aborted and its answer is ignored | `ignores an old response that arrives after a newer one`            |
-| The same text is typed again | LRU cache: no network call                           | `answers a repeated query from the cache without a new request`     |
-| The server sends 5,000 items | We keep and draw only 10                             | `draws only 10 rows when the server sends 5,000 items`              |
-| The user searches all day    | The cache holds at most 50 queries of 10 items each  | `never holds more than its limit, even after 10,000 different keys` |
-
-## Edge cases covered
-
-- Fewer than two characters, or only spaces: no request.
-- Upper case and lower case are the same query.
-- A failed request shows an error with "Try again", and is not cached.
-- No results shows a clear message.
-- Enter while typing in a Hindi, Japanese or Chinese keyboard does not select.
-- Enter with no active row does not select, so a form around the input can submit.
-- The list becomes shorter while a row is active: the active row is dropped.
-- Clicking a row works even though the click takes focus away from the input.
-- The component is removed while a request is in flight: the request is aborted.
-
-## Accessibility
-
-The input follows the WAI-ARIA combobox pattern: `role="combobox"`,
-`aria-expanded`, `aria-controls` and `aria-activedescendant` on the input,
-`role="listbox"` and `role="option"` on the list. Focus stays in the input the
-whole time. A hidden status line tells screen reader users how many results
-are available.
-
-## Try it in the demo
-
-1. Type `mum` quickly. The panel shows one request, not three.
-2. Delete the last `m`, then type it again. No new request, because of the cache.
-3. Tick "Make the server fail" and type `pun`. You get an error. Untick it and press "Try again".
-4. Use ArrowDown, ArrowUp, Enter and Escape without touching the mouse.
+Each addition is small on purpose. A staff answer is not more features. It is
+the same feature with fewer reasons for another team to copy and change it.
