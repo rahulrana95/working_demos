@@ -109,7 +109,7 @@ function TypeaheadInner<T>(
   // for that label.
   const query = isOpen ? inputValue : "";
 
-  const { status, items, retry } = useTypeahead({
+  const { status, items, retry, isStale } = useTypeahead({
     query,
     search,
     debounceMs,
@@ -129,7 +129,8 @@ function TypeaheadInner<T>(
 
   // The list can become shorter while an option is active.
   // In that case we drop the active option, so we never point at a row that is gone.
-  const safeActiveIndex = activeIndex < items.length ? activeIndex : NO_ACTIVE_OPTION;
+  // Stale rows belong to an older query, so none of them can be active.
+  const safeActiveIndex = !isStale && activeIndex < items.length ? activeIndex : NO_ACTIVE_OPTION;
 
   function changeValue(nextValue: string) {
     setOwnValue(nextValue);
@@ -150,7 +151,7 @@ function TypeaheadInner<T>(
   }
 
   function moveActiveOption(step: 1 | -1) {
-    if (items.length === 0) {
+    if (items.length === 0 || isStale) {
       return;
     }
 
@@ -270,7 +271,12 @@ function TypeaheadInner<T>(
       </div>
 
       <div className="typeahead__popup" hidden={!isPopupVisible} onMouseDown={keepFocusOnInput}>
-        <ul id={listboxId} className="typeahead__list" role="listbox" aria-label={label}>
+        <ul
+          id={listboxId}
+          className={isStale ? "typeahead__list is-stale" : "typeahead__list"}
+          role="listbox"
+          aria-label={label}
+        >
           {isListVisible &&
             items.map((item, index) => {
               const isActive = index === safeActiveIndex;
@@ -282,8 +288,9 @@ function TypeaheadInner<T>(
                   className={isActive ? "typeahead__option is-active" : "typeahead__option"}
                   role="option"
                   aria-selected={isActive}
+                  aria-disabled={isStale}
                   onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() => selectItem(item)}
+                  onClick={isStale ? undefined : () => selectItem(item)}
                 >
                   {renderItem
                     ? renderItem(item, { isActive, query: typedQuery })

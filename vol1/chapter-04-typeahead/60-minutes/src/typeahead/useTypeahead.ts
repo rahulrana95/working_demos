@@ -40,6 +40,8 @@ const FIVE_MINUTES_MS = 5 * 60 * 1000;
 export interface UseTypeaheadReturn<T> extends TypeaheadResult<T> {
   /** Runs the last query again. Used by the "Try again" button. */
   retry: () => void;
+  /** True while the rows on screen belong to an older query. They must not be picked. */
+  isStale: boolean;
 }
 
 export function useTypeahead<T>({
@@ -124,5 +126,8 @@ export function useTypeahead<T>({
     setAttempt((count) => count + 1);
   }, []);
 
-  return { ...result, retry };
+  // While loading, any items we still hold came from an earlier query.
+  const isStale = result.status === "loading" && result.items.length > 0;
+
+  return { ...result, retry, isStale };
 }

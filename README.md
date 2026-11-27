@@ -7,10 +7,11 @@ the table is a separate project, so you can run one without installing the other
 
 ## Volume 1
 
-| Chapter | Topic                                    | Folder                                                                         |
-| ------- | ---------------------------------------- | ------------------------------------------------------------------------------ |
-| 4       | Typeahead: the senior answer, 45 minutes | [`vol1/chapter-04-typeahead/45-minutes`](vol1/chapter-04-typeahead/45-minutes) |
-| 4       | Typeahead: the staff answer, 60 minutes  | [`vol1/chapter-04-typeahead/60-minutes`](vol1/chapter-04-typeahead/60-minutes) |
+| Chapter | Topic                                                      | Folder                                                                         |
+| ------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 4       | Typeahead: the senior answer, 45 minutes                   | [`vol1/chapter-04-typeahead/45-minutes`](vol1/chapter-04-typeahead/45-minutes) |
+| 4       | Typeahead: the staff answer, 60 minutes                    | [`vol1/chapter-04-typeahead/60-minutes`](vol1/chapter-04-typeahead/60-minutes) |
+| 4       | Typeahead: the production version, not an interview answer | [`vol1/chapter-04-typeahead/production`](vol1/chapter-04-typeahead/production) |
 
 ## Run any chapter
 

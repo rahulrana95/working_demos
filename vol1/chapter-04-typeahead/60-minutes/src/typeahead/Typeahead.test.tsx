@@ -229,6 +229,91 @@ describe("Typeahead: race conditions", () => {
   });
 });
 
+describe("Typeahead: stale rows", () => {
+  /** Shows the rows for "mu", then types "mum" and leaves that request in flight. */
+  async function showStaleRows() {
+    const pending = createDeferred<string[]>();
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(["Mumbai", "Munnar"])
+      .mockReturnValue(pending.promise);
+    const utils = renderTypeahead(search);
+
+    await typeAndWait(utils.type, "mu");
+    await typeAndWait(utils.type, "mum");
+
+    return { ...utils, pending };
+  }
+
+  it("keeps the old rows on screen, dimmed, while the new search loads", async () => {
+    await showStaleRows();
+
+    expect(getOptionTexts()).toEqual(["Mumbai", "Munnar"]);
+    expect(screen.getByRole("listbox")).toHaveClass("is-stale");
+  });
+
+  it("Enter does not pick a stale row", async () => {
+    const { input, press, onSelect } = await showStaleRows();
+
+    press("ArrowDown");
+    press("Enter");
+
+    expect(input).not.toHaveAttribute("aria-activedescendant");
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(input.value).toBe("mum");
+  });
+
+  it("click does not pick a stale row", async () => {
+    const { input, onSelect } = await showStaleRows();
+
+    fireEvent.click(screen.getByRole("option", { name: "Munnar" }));
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(input.value).toBe("mum");
+  });
+
+  it("rows are marked aria-disabled while stale and not after", async () => {
+    const { pending, press, onSelect } = await showStaleRows();
+
+    for (const option of screen.getAllByRole("option")) {
+      expect(option).toHaveAttribute("aria-disabled", "true");
+    }
+
+    pending.resolve(["Mumbai"]);
+    await wait(0);
+
+    expect(screen.getByRole("option", { name: "Mumbai" })).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
+    expect(screen.getByRole("listbox")).not.toHaveClass("is-stale");
+
+    press("ArrowDown");
+    press("Enter");
+    expect(onSelect).toHaveBeenCalledWith("Mumbai");
+  });
+
+  it("a cache hit is never stale", async () => {
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(["Mumbai", "Munnar"])
+      .mockResolvedValue(["Mumbai"]);
+    const { type } = renderTypeahead(search);
+
+    await typeAndWait(type, "mu");
+    await typeAndWait(type, "mum");
+    // "mu" is in the cache, so its rows are shown at once and can be picked.
+    type("mu");
+
+    expect(getOptionTexts()).toEqual(["Mumbai", "Munnar"]);
+    expect(screen.getByRole("listbox")).not.toHaveClass("is-stale");
+    expect(screen.getByRole("option", { name: "Munnar" })).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
+  });
+});
+
 describe("Typeahead: cache", () => {
   it("answers a repeated query from the cache without a new request", async () => {
     const search = vi

@@ -115,6 +115,11 @@ kbd {
   list-style: none;
 }
 
+/* Rows from an older query stay on screen while the new ones load, but dimmed. */
+.typeahead__list.is-stale {
+  opacity: 0.5;
+}
+
 .typeahead__option {
   padding-block: 10px;
   padding-inline: 12px;
