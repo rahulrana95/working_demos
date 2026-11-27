@@ -127,6 +127,14 @@ export function Typeahead<T>({
       }
 
       case "Enter": {
+        if (isPopupVisible && isStale) {
+          // The rows belong to an older text, so there is nothing to pick yet.
+          // We also stop the form around the input from being submitted with
+          // a text the user has not finished.
+          event.preventDefault();
+          return;
+        }
+
         const activeItem = items[safeActiveIndex];
 
         if (isListVisible && activeItem !== undefined) {

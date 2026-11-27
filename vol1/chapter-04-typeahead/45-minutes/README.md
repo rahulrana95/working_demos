@@ -37,15 +37,15 @@ because JSON cannot hold a comment: none of them is part of the interview.
 | `src/typeahead/types.ts`        | Yes               | 1 minute   | 6             |
 | `src/typeahead/useTypeahead.ts` | Yes               | 15 minutes | 74            |
 | `src/typeahead/lruCache.ts`     | Yes               | 4 minutes  | 24            |
-| `src/typeahead/Typeahead.tsx`   | Yes               | 20 minutes | 199           |
+| `src/typeahead/Typeahead.tsx`   | Yes               | 20 minutes | 203           |
 | `*.test.ts`, `*.test.tsx`       | No                |            |               |
 | `src/App.tsx`, `src/api/`       | No                |            |               |
 | `src/styles.css`                | No                |            |               |
 
-Lines of code are counted without blank lines and comments: 303 in total.
-The folder has 58 tests.
+Lines of code are counted without blank lines and comments: 307 in total.
+The folder has 64 tests.
 
-The component code is 1,813 bytes when it is minified and compressed with gzip,
+The component code is 1,819 bytes when it is minified and compressed with gzip,
 without React. Measure it again with:
 
 ```bash
@@ -54,6 +54,25 @@ npx esbuild src/typeahead/index.ts --bundle --minify --format=esm --external:rea
 
 That is about 40 minutes of typing for someone who has practised it. The other
 5 minutes go to walking the interviewer through one race condition.
+
+## How the styles ship
+
+The component needs CSS to work as described. It needs the rules in
+`src/styles.css` whose selectors start with `.typeahead`, plus
+`.visually-hidden`. They are the part of the file under the "Typeahead"
+heading. The other rules style the demo page.
+
+- In a real package these rules ship as one CSS file next to the JavaScript, and the host app imports both.
+- The colours (`--color-…`) and the stacking order of the popup (`--typeahead-z-index`, default 10) are CSS variables, so a host app can theme the component without changing its rules.
+- The input sets `font-size: max(16px, 1em)`, because Safari on iPhone zooms the page when a focused input has text smaller than 16px.
+- Every row is at least 44px tall, so a finger can hit it.
+
+The measured JavaScript size does not include this CSS. The typeahead rules are
+630 bytes more, minified and compressed with gzip. Measure them again with:
+
+```bash
+awk '/^\/\* -+ /{on = /Typeahead/} on' src/styles.css | npx esbuild --loader=css --minify | gzip -9 -c | wc -c
+```
 
 ## Why it holds at scale
 
@@ -74,6 +93,7 @@ That is about 40 minutes of typing for someone who has practised it. The other
 - No results shows a clear message.
 - Enter while typing in a Hindi, Japanese or Chinese keyboard does not select. This also holds in Safari, which sends that Enter in a different way.
 - Enter with no active row does not select, so a form around the input can submit.
+- Enter while the old rows are still on screen for a new search: nothing is picked, and a form around the input is not submitted with a text the user has not finished.
 - The list becomes shorter while a row is active: the active row is dropped.
 - ArrowDown and ArrowUp do nothing when the list is empty or shows an error.
 - Clicking a row works even though the click takes focus away from the input.

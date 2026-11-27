@@ -1,8 +1,8 @@
 /*
  * NOT PART OF THE INTERVIEW: production version.
- * The first part is the tests of the 60-minute answer. Three things differ:
- * "Searching…" is shown after a short wait, `name` sends the key of the
- * picked item, and the tests wait one frame for a `results_shown` event.
+ * The first part is the tests of the 60-minute answer. Two things differ:
+ * "Searching…" is shown after a short wait, and the tests wait one frame
+ * for a `results_shown` event.
  * The second part, from "clean text" on, tests the production features.
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -10,7 +10,7 @@ import { createRef, useState } from "react";
 import type { Ref } from "react";
 import { Typeahead } from "./Typeahead";
 import type { TypeaheadProps } from "./Typeahead";
-import { RetryLaterError } from "./retryLaterError";
+import { MAX_RETRY_WAIT_MS, RetryLaterError } from "./retryLaterError";
 import { clearSharedCaches } from "./sharedCache";
 import type { SearchFn, TypeaheadEvent } from "./types";
 
@@ -361,6 +361,80 @@ describe("Typeahead: stale rows", () => {
       "aria-disabled",
       "false",
     );
+  });
+});
+
+describe("Typeahead: Enter inside a form", () => {
+  function renderInForm(search: SearchFn<string>) {
+    const onSubmit = vi.fn();
+    const onSelect = vi.fn();
+
+    render(
+      <form onSubmit={onSubmit}>
+        <Typeahead
+          label="City"
+          search={search}
+          getItemLabel={(city: string) => city}
+          getItemKey={(city: string) => city}
+          onSelect={onSelect}
+          debounceMs={DEBOUNCE_MS}
+        />
+      </form>,
+    );
+
+    const input = screen.getByRole("combobox");
+    const type = (text: string) => fireEvent.change(input, { target: { value: text } });
+    const press = (key: string) => fireEvent.keyDown(input, { key });
+
+    // jsdom does not submit a form when Enter is pressed in an input. So we
+    // do what a browser does: submit, unless the key press was cancelled.
+    const pressEnter = () => {
+      const isAllowed = press("Enter");
+      if (isAllowed) {
+        fireEvent.submit(input);
+      }
+    };
+
+    return { type, press, pressEnter, onSubmit, onSelect };
+  }
+
+  it("does not submit the form and picks nothing while the rows are stale", async () => {
+    const pending = createDeferred<string[]>();
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(["Mumbai", "Munnar"])
+      .mockReturnValue(pending.promise);
+    const { type, press, pressEnter, onSubmit, onSelect } = renderInForm(search);
+    await typeAndWait(type, "mu");
+    await typeAndWait(type, "mum");
+
+    press("ArrowDown");
+    pressEnter();
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("lets the form submit when the rows are fresh and no row is active", async () => {
+    const search = vi.fn().mockResolvedValue(["Mumbai", "Munnar"]);
+    const { type, pressEnter, onSubmit, onSelect } = renderInForm(search);
+    await typeAndWait(type, "mu");
+
+    pressEnter();
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("lets the form submit when the list is closed", async () => {
+    const search = vi.fn().mockResolvedValue(["Mumbai", "Munnar"]);
+    const { type, press, pressEnter, onSubmit } = renderInForm(search);
+    await typeAndWait(type, "mu");
+    press("Escape");
+
+    pressEnter();
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1450,7 +1524,34 @@ describe("Typeahead: offline", () => {
 });
 
 describe("Typeahead: rate limit", () => {
-  const RETRY_AFTER_MS = 2000;
+  /** The longest wait the typeahead accepts, so these tests are on the limit. */
+  const RETRY_AFTER_MS = MAX_RETRY_WAIT_MS;
+
+  it("waits and tries again when the server asks for exactly the longest wait", async () => {
+    const search = vi
+      .fn()
+      .mockRejectedValueOnce(new RetryLaterError(MAX_RETRY_WAIT_MS))
+      .mockResolvedValue(["Mumbai"]);
+    const { type } = renderTypeahead(search);
+    await typeAndWait(type, "mum");
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    await wait(MAX_RETRY_WAIT_MS);
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(getOptionTexts()).toEqual(["Mumbai"]);
+  });
+
+  it("shows the error at once, and does not try again, when the server asks for a longer wait", async () => {
+    const search = vi.fn().mockRejectedValue(new RetryLaterError(MAX_RETRY_WAIT_MS + 1));
+    const { type } = renderTypeahead(search);
+
+    await typeAndWait(type, "mum");
+    expect(screen.getByRole("alert")).toHaveTextContent("Something went wrong.");
+
+    await wait(60_000);
+    expect(search).toHaveBeenCalledTimes(1);
+  });
 
   it("stays in loading, waits, and tries once more when the server says try later", async () => {
     const search = vi
@@ -1585,6 +1686,47 @@ describe("Typeahead: shared cache", () => {
     await typeIn("From", "mum");
     await typeIn("To", "mum");
 
+    expect(search).toHaveBeenCalledTimes(2);
+  });
+
+  it("moves to a new cache when cacheKey changes, and the old key keeps its answers", async () => {
+    const search = vi.fn().mockResolvedValue(["Mumbai"]);
+
+    function Boxes({ toKey }: { toKey: string }) {
+      const boxes = [
+        { label: "From", cacheKey: "places" },
+        { label: "Via", cacheKey: "places" },
+        { label: "To", cacheKey: toKey },
+      ];
+
+      return boxes.map(({ label, cacheKey }) => (
+        <Typeahead
+          key={label}
+          label={label}
+          cacheKey={cacheKey}
+          search={search}
+          getItemLabel={(city: string) => city}
+          getItemKey={(city: string) => city}
+          onSelect={() => {}}
+          debounceMs={DEBOUNCE_MS}
+        />
+      ));
+    }
+
+    const typeIn = async (label: string, text: string) => {
+      fireEvent.change(screen.getByRole("combobox", { name: label }), { target: { value: text } });
+      await wait(DEBOUNCE_MS);
+    };
+
+    const { rerender } = render(<Boxes toKey="places" />);
+    await typeIn("From", "mum");
+    expect(search).toHaveBeenCalledTimes(1);
+
+    rerender(<Boxes toKey="places-v2" />);
+    await typeIn("To", "mum");
+    expect(search).toHaveBeenCalledTimes(2);
+
+    await typeIn("Via", "mum");
     expect(search).toHaveBeenCalledTimes(2);
   });
 

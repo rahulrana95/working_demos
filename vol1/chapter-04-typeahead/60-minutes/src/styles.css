@@ -86,6 +86,8 @@ kbd {
   background: var(--color-surface);
   color: inherit;
   font: inherit;
+  /* Safari on iPhone zooms the page when a focused input has text smaller than 16px. */
+  font-size: max(16px, 1em);
 }
 
 .typeahead__input:focus-visible {
@@ -96,7 +98,8 @@ kbd {
 /* The popup floats over the page, so opening it does not push content down. */
 .typeahead__popup {
   position: absolute;
-  z-index: 10;
+  /* A host app can set this variable to place the popup above its own layers. */
+  z-index: var(--typeahead-z-index, 10);
   inset-block-start: calc(100% + 4px);
   inset-inline: 0;
   border: 1px solid var(--color-border);
@@ -129,6 +132,8 @@ kbd {
    */
   padding-inline: 9px 12px;
   border-inline-start: 3px solid transparent;
+  /* A finger needs a target about 44px tall. */
+  min-block-size: 44px;
   cursor: pointer;
 }
 

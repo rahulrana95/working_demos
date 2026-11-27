@@ -61,17 +61,32 @@ const CITIES: City[] = [
  * HTTP status code, so this function turns each kind of answer into what
  * the typeahead understands (the three rules are in `typeahead/types.ts`):
  *
+ *   // `Retry-After` comes in two forms: a number of seconds ("2"), or an
+ *   // HTTP date ("Fri, 27 Nov 2026 07:28:00 GMT"). A missing or unreadable
+ *   // header means 1 second.
+ *   function readRetryAfterMs(header: string | null): number {
+ *     if (header === null || header.trim() === "") {
+ *       return 1000;
+ *     }
+ *     const seconds = Number(header);
+ *     if (Number.isFinite(seconds)) {
+ *       return Math.max(0, seconds * 1000);
+ *     }
+ *     // A date: we wait until that moment. A date in the past means "now".
+ *     const dateMs = Date.parse(header);
+ *     return Number.isNaN(dateMs) ? 1000 : Math.max(0, dateMs - Date.now());
+ *   }
+ *
  *   const searchCities: SearchFn<City> = async (query, signal) => {
  *     const response = await fetch(`/api/cities?q=${encodeURIComponent(query)}`, { signal });
  *
- *     // Rule a: "too many requests" becomes RetryLaterError.
+ *     // Rule a: "too many requests" becomes RetryLaterError. The typeahead
+ *     // waits at most 2 seconds. For a longer wait it shows the error at once.
  *     if (response.status === 429) {
- *       // The header holds seconds. A missing or unreadable header means 1 second.
  *       // If the API is on another origin, the browser hides this header
  *       // from JavaScript. The server must send
  *       // `Access-Control-Expose-Headers: Retry-After` to let us read it.
- *       const seconds = Number(response.headers.get("Retry-After"));
- *       throw new RetryLaterError(seconds > 0 ? seconds * 1000 : 1000);
+ *       throw new RetryLaterError(readRetryAfterMs(response.headers.get("Retry-After")));
  *     }
  *
  *     // Rule b: every other failure becomes a normal error. Never return []

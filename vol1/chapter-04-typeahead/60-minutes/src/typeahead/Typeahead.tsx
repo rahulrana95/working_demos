@@ -8,6 +8,7 @@
  *
  * The staff-level additions, so other teams can reuse the component:
  *   5. `value` and `onValueChange`, form props and `ref`. (4 minutes)
+ *      `name` sends the key of the picked item, in a hidden input.
  *   6. `renderItem` for custom rows.                      (2 minutes)
  *   7. `messages` for translation.                        (1 minute)
  *   8. `className` on the root element.                   (1 minute)
@@ -56,8 +57,13 @@ export interface TypeaheadProps<T> {
   /** Called every time the text changes: on typing, on select and on clear. */
   onValueChange?: (value: string) => void;
 
-  /** Form props. They go straight to the input element. */
+  /**
+   * With a name, a form gets the key of the picked item (from `getItemKey`)
+   * under that name. It gets an empty text while nothing is picked, also
+   * when the user has typed a text but picked no row.
+   */
   name?: string;
+  /** Form props. They go straight to the input element. */
   disabled?: boolean;
   required?: boolean;
 
@@ -99,6 +105,12 @@ function TypeaheadInner<T>(
   const [ownValue, setOwnValue] = useState("");
   const inputValue = value ?? ownValue;
   const typedQuery = inputValue.trim();
+
+  // The item the user picked last, for the form value.
+  const [picked, setPicked] = useState<{ key: string; label: string } | null>(null);
+  // The parent can change the text from outside, for example to reset a form.
+  // So the pick counts only while the input still shows the picked label.
+  const pickedKey = picked !== null && picked.label === inputValue ? picked.key : "";
 
   const text = { ...DEFAULT_MESSAGES, ...messages };
 
@@ -143,7 +155,9 @@ function TypeaheadInner<T>(
   }
 
   function selectItem(item: T) {
-    changeValue(getItemLabel(item));
+    const itemLabel = getItemLabel(item);
+    changeValue(itemLabel);
+    setPicked({ key: getItemKey(item), label: itemLabel });
     setIsOpen(false);
     setActiveIndex(NO_ACTIVE_OPTION);
     onSelect(item);
@@ -151,6 +165,8 @@ function TypeaheadInner<T>(
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     changeValue(event.target.value);
+    // The text is no longer the picked item, so the form must not send its key.
+    setPicked(null);
     setIsOpen(true);
     setActiveIndex(NO_ACTIVE_OPTION);
   }
@@ -195,6 +211,14 @@ function TypeaheadInner<T>(
       }
 
       case "Enter": {
+        if (isPopupVisible && isStale) {
+          // The rows belong to an older text, so there is nothing to pick yet.
+          // We also stop the form around the input from being submitted with
+          // a text the user has not finished.
+          event.preventDefault();
+          return;
+        }
+
         const activeItem = items[safeActiveIndex];
 
         if (isListVisible && activeItem !== undefined) {
@@ -258,7 +282,6 @@ function TypeaheadInner<T>(
       <input
         ref={inputRef}
         id={inputId}
-        name={name}
         disabled={disabled}
         required={required}
         className="typeahead__input"
@@ -280,6 +303,11 @@ function TypeaheadInner<T>(
         onChange={handleChange}
         onKeyDown={handleKeyDown}
       />
+
+      {/* The visible input holds a label for people. The form needs the key. */}
+      {name !== undefined && (
+        <input type="hidden" name={name} value={pickedKey} disabled={disabled} />
+      )}
 
       {/*
         Screen readers read this text when it changes. It is hidden on screen.

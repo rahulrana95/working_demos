@@ -13,7 +13,8 @@
  * The typeahead never sees the HTTP status code. It only sees whether the
  * promise resolves or rejects. So your `search` function must keep three rules:
  *   a. For HTTP 429 ("too many requests"), reject with
- *      `new RetryLaterError(retryAfterMs)`. The typeahead waits and tries once more.
+ *      `new RetryLaterError(retryAfterMs)`. The typeahead waits and tries once
+ *      more. If the wait is longer than 2 seconds, it shows the error at once.
  *   b. For every other failure (500, 404, a broken connection, bad JSON),
  *      reject with any other error. The user sees an error and "Try again".
  *   c. Resolve with an empty array only when the server really found nothing.

@@ -41,4 +41,20 @@ describe("styles", () => {
     expect(highContrast).toMatch(/\.typeahead__option\s*{\s*border-inline-start-color: Canvas/);
     expect(highContrast).toMatch(/\.is-active\s*{\s*border-inline-start-color: Highlight/);
   });
+
+  it("keeps the text of the input at 16px or more, so Safari on iPhone does not zoom", () => {
+    expect(withoutComments(styles)).toMatch(
+      /\.typeahead__input\s*{[^}]*font-size: max\(16px, 1em\)/,
+    );
+  });
+
+  it("makes every row at least 44px tall, so a finger can hit it", () => {
+    expect(withoutComments(styles)).toMatch(/\.typeahead__option\s*{[^}]*min-block-size: 44px/);
+  });
+
+  it("lets the host app set the stacking order of the popup, with 10 as the default", () => {
+    expect(withoutComments(styles)).toMatch(
+      /\.typeahead__popup\s*{[^}]*z-index: var\(--typeahead-z-index, 10\)/,
+    );
+  });
 });

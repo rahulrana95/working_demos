@@ -6,7 +6,6 @@
  *   3. `onEvent`, which also reports the row the user picked.
  *   4. `minChars` counts the characters the user sees.
  *   5. `searchingDelayMs`: a fast search never shows "Searching…".
- *   6. `name` sends the key of the picked item with the form, not the text.
  */
 import { forwardRef, useId, useImperativeHandle, useRef, useState } from "react";
 import type {
@@ -52,6 +51,7 @@ export interface TypeaheadProps<T> {
   /**
    * Typeaheads with the same key share one cache. Use one key for one search
    * function only. Leave it out and this typeahead keeps its own cache.
+   * Change the key and the typeahead moves to the cache of the new key.
    */
   cacheKey?: string;
   /** Receives what happened, for analytics. An event never holds the typed text. */
@@ -234,6 +234,14 @@ function TypeaheadInner<T>(
       }
 
       case "Enter": {
+        if (isPopupVisible && isStale) {
+          // The rows belong to an older text, so there is nothing to pick yet.
+          // We also stop the form around the input from being submitted with
+          // a text the user has not finished.
+          event.preventDefault();
+          return;
+        }
+
         const activeItem = items[safeActiveIndex];
 
         if (isListVisible && activeItem !== undefined) {

@@ -344,6 +344,80 @@ describe("Typeahead: stale rows", () => {
   });
 });
 
+describe("Typeahead: Enter inside a form", () => {
+  function renderInForm(search: SearchFn<string>) {
+    const onSubmit = vi.fn();
+    const onSelect = vi.fn();
+
+    render(
+      <form onSubmit={onSubmit}>
+        <Typeahead
+          label="City"
+          search={search}
+          getItemLabel={(city: string) => city}
+          getItemKey={(city: string) => city}
+          onSelect={onSelect}
+          debounceMs={DEBOUNCE_MS}
+        />
+      </form>,
+    );
+
+    const input = screen.getByRole("combobox");
+    const type = (text: string) => fireEvent.change(input, { target: { value: text } });
+    const press = (key: string) => fireEvent.keyDown(input, { key });
+
+    // jsdom does not submit a form when Enter is pressed in an input. So we
+    // do what a browser does: submit, unless the key press was cancelled.
+    const pressEnter = () => {
+      const isAllowed = press("Enter");
+      if (isAllowed) {
+        fireEvent.submit(input);
+      }
+    };
+
+    return { type, press, pressEnter, onSubmit, onSelect };
+  }
+
+  it("does not submit the form and picks nothing while the rows are stale", async () => {
+    const pending = createDeferred<string[]>();
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(["Mumbai", "Munnar"])
+      .mockReturnValue(pending.promise);
+    const { type, press, pressEnter, onSubmit, onSelect } = renderInForm(search);
+    await typeAndWait(type, "mu");
+    await typeAndWait(type, "mum");
+
+    press("ArrowDown");
+    pressEnter();
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("lets the form submit when the rows are fresh and no row is active", async () => {
+    const search = vi.fn().mockResolvedValue(["Mumbai", "Munnar"]);
+    const { type, pressEnter, onSubmit, onSelect } = renderInForm(search);
+    await typeAndWait(type, "mu");
+
+    pressEnter();
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("lets the form submit when the list is closed", async () => {
+    const search = vi.fn().mockResolvedValue(["Mumbai", "Munnar"]);
+    const { type, press, pressEnter, onSubmit } = renderInForm(search);
+    await typeAndWait(type, "mu");
+    press("Escape");
+
+    pressEnter();
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("Typeahead: cache", () => {
   it("answers a repeated query from the cache without a new request", async () => {
     const search = vi
@@ -823,11 +897,10 @@ describe("Typeahead: text controlled by the parent", () => {
 });
 
 describe("Typeahead: inside a form", () => {
-  it("passes name, required and disabled to the input", () => {
+  it("passes required and disabled to the input", () => {
     const search = vi.fn().mockResolvedValue([]);
-    const { input } = renderTypeahead(search, { name: "city", required: true, disabled: true });
+    const { input } = renderTypeahead(search, { required: true, disabled: true });
 
-    expect(input).toHaveAttribute("name", "city");
     expect(input).toBeRequired();
     expect(input).toBeDisabled();
   });
@@ -848,25 +921,75 @@ describe("Typeahead: inside a form", () => {
     expect(ref.current).toBe(input);
   });
 
-  it("sends the typed text with the form under the given name", () => {
-    const search = vi.fn().mockResolvedValue([]);
-    render(
-      <form aria-label="Trip">
-        <Typeahead
-          label="City"
-          name="city"
-          search={search}
-          getItemLabel={(city: string) => city}
-          getItemKey={(city) => city}
-          onSelect={() => {}}
-        />
-      </form>,
-    );
+  describe("the value sent with the form", () => {
+    interface City {
+      id: string;
+      name: string;
+    }
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Pune" } });
+    const MUMBAI: City = { id: "bom", name: "Mumbai" };
 
-    const form = screen.getByRole("form", { name: "Trip" }) as HTMLFormElement;
-    expect(new FormData(form).get("city")).toBe("Pune");
+    function renderInForm() {
+      render(
+        <form aria-label="Trip">
+          <Typeahead
+            label="City"
+            name="cityId"
+            search={vi.fn().mockResolvedValue([MUMBAI])}
+            getItemLabel={(city: City) => city.name}
+            getItemKey={(city) => city.id}
+            onSelect={() => {}}
+            debounceMs={DEBOUNCE_MS}
+          />
+        </form>,
+      );
+
+      const input = screen.getByRole("combobox");
+      const type = (text: string) => fireEvent.change(input, { target: { value: text } });
+      const form = screen.getByRole("form", { name: "Trip" }) as HTMLFormElement;
+      const getFormValues = () => Array.from(new FormData(form).entries());
+
+      return { input, type, getFormValues };
+    }
+
+    async function pickMumbai(type: (text: string) => void) {
+      await typeAndWait(type, "mum");
+      fireEvent.click(screen.getByRole("option", { name: "Mumbai" }));
+    }
+
+    it("sends the key of the picked item, not the text on screen", async () => {
+      const { input, type, getFormValues } = renderInForm();
+
+      await pickMumbai(type);
+
+      expect(input).toHaveValue("Mumbai");
+      expect(input).not.toHaveAttribute("name");
+      expect(getFormValues()).toEqual([["cityId", "bom"]]);
+    });
+
+    it("sends an empty value for a text that was typed but not picked", async () => {
+      const { type, getFormValues } = renderInForm();
+
+      await typeAndWait(type, "mum");
+
+      expect(getFormValues()).toEqual([["cityId", ""]]);
+    });
+
+    it("clears the value when the user edits the text after a pick", async () => {
+      const { type, getFormValues } = renderInForm();
+      await pickMumbai(type);
+
+      type("Mumba");
+      expect(getFormValues()).toEqual([["cityId", ""]]);
+
+      // The same text again is still not a pick. The user must pick a row.
+      type("Mumbai");
+      expect(getFormValues()).toEqual([["cityId", ""]]);
+
+      await wait(DEBOUNCE_MS);
+      fireEvent.click(screen.getByRole("option", { name: "Mumbai" }));
+      expect(getFormValues()).toEqual([["cityId", "bom"]]);
+    });
   });
 });
 

@@ -337,6 +337,80 @@ describe("Typeahead: stale rows", () => {
   });
 });
 
+describe("Typeahead: Enter inside a form", () => {
+  function renderInForm(search: SearchFn<string>) {
+    const onSubmit = vi.fn();
+    const onSelect = vi.fn();
+
+    render(
+      <form onSubmit={onSubmit}>
+        <Typeahead
+          label="City"
+          search={search}
+          getItemLabel={(city: string) => city}
+          getItemKey={(city: string) => city}
+          onSelect={onSelect}
+          debounceMs={DEBOUNCE_MS}
+        />
+      </form>,
+    );
+
+    const input = screen.getByRole("combobox");
+    const type = (text: string) => fireEvent.change(input, { target: { value: text } });
+    const press = (key: string) => fireEvent.keyDown(input, { key });
+
+    // jsdom does not submit a form when Enter is pressed in an input. So we
+    // do what a browser does: submit, unless the key press was cancelled.
+    const pressEnter = () => {
+      const isAllowed = press("Enter");
+      if (isAllowed) {
+        fireEvent.submit(input);
+      }
+    };
+
+    return { type, press, pressEnter, onSubmit, onSelect };
+  }
+
+  it("does not submit the form and picks nothing while the rows are stale", async () => {
+    const pending = createDeferred<string[]>();
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(["Mumbai", "Munnar"])
+      .mockReturnValue(pending.promise);
+    const { type, press, pressEnter, onSubmit, onSelect } = renderInForm(search);
+    await typeAndWait(type, "mu");
+    await typeAndWait(type, "mum");
+
+    press("ArrowDown");
+    pressEnter();
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("lets the form submit when the rows are fresh and no row is active", async () => {
+    const search = vi.fn().mockResolvedValue(["Mumbai", "Munnar"]);
+    const { type, pressEnter, onSubmit, onSelect } = renderInForm(search);
+    await typeAndWait(type, "mu");
+
+    pressEnter();
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("lets the form submit when the list is closed", async () => {
+    const search = vi.fn().mockResolvedValue(["Mumbai", "Munnar"]);
+    const { type, press, pressEnter, onSubmit } = renderInForm(search);
+    await typeAndWait(type, "mu");
+    press("Escape");
+
+    pressEnter();
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("Typeahead: cache", () => {
   it("answers a repeated query from the cache without a new request", async () => {
     const search = vi

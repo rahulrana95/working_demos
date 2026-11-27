@@ -5,6 +5,6 @@ export { useTypeahead } from "./useTypeahead";
 export type { SearchFn, TypeaheadErrorReason, TypeaheadEvent, TypeaheadStatus } from "./types";
 export { DEFAULT_MESSAGES } from "./messages";
 export type { TypeaheadMessages } from "./messages";
-export { RetryLaterError } from "./retryLaterError";
+export { MAX_RETRY_WAIT_MS, RetryLaterError } from "./retryLaterError";
 export { clearSharedCaches } from "./sharedCache";
 export { countGraphemes, normaliseQuery } from "./text";

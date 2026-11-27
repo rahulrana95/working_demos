@@ -39,16 +39,16 @@ because JSON cannot hold a comment: none of them is part of the interview.
 | `src/typeahead/messages.ts`     | Yes                                 | 2 minutes  | 14                           |
 | `src/typeahead/useTypeahead.ts` | Yes                                 | 16 minutes | 79                           |
 | `src/typeahead/lruCache.ts`     | Yes                                 | 6 minutes  | 35                           |
-| `src/typeahead/Typeahead.tsx`   | Yes                                 | 28 minutes | 248                          |
-| `src/styles.css`                | Only the idea of logical properties | 2 minutes  | 180, most of it demo styling |
+| `src/typeahead/Typeahead.tsx`   | Yes                                 | 28 minutes | 259                          |
+| `src/styles.css`                | Only the idea of logical properties | 2 minutes  | 182, most of it demo styling |
 | `*.test.ts`, `*.test.tsx`       | No                                  |            |                              |
 | `src/App.tsx`, `src/api/`       | No                                  |            |                              |
 
-Lines of code are counted without blank lines and comments: 382 in the five
-TypeScript files, which is 79 more than the 45-minute answer. The folder has
-90 tests.
+Lines of code are counted without blank lines and comments: 393 in the five
+TypeScript files, which is 86 more than the 45-minute answer. The folder has
+98 tests.
 
-The component code is 2,154 bytes when it is minified and compressed with gzip,
+The component code is 2,229 bytes when it is minified and compressed with gzip,
 without React. Measure it again with:
 
 ```bash
@@ -68,19 +68,47 @@ That is about 55 minutes of typing for someone who has practised it. The other
 | `cacheTtlMs`, `maxQueryLength`                                  | `lruCache.ts`, `useTypeahead.ts` | 3       |
 | `className`, logical CSS properties                             | `Typeahead.tsx`, `styles.css`    | 3       |
 
+## How the styles ship
+
+The component needs CSS to work as described. It needs the rules in
+`src/styles.css` whose selectors start with `.typeahead`, plus
+`.visually-hidden`. They are the part of the file under the "Typeahead"
+heading. The other rules style the demo page.
+
+- In a real package these rules ship as one CSS file next to the JavaScript, and the host app imports both.
+- The colours (`--color-…`) and the stacking order of the popup (`--typeahead-z-index`, default 10) are CSS variables, so a host app can theme the component without changing its rules.
+- The input sets `font-size: max(16px, 1em)`, because Safari on iPhone zooms the page when a focused input has text smaller than 16px.
+- Every row is at least 44px tall, so a finger can hit it.
+
+The measured JavaScript size does not include this CSS. The typeahead rules are
+640 bytes more, minified and compressed with gzip. Measure them again with:
+
+```bash
+awk '/^\/\* -+ /{on = /Typeahead/} on' src/styles.css | npx esbuild --loader=css --minify | gzip -9 -c | wc -c
+```
+
+## The form value
+
+With `name`, the component adds a hidden input with that name. Its value is
+`getItemKey(item)` of the picked row. The visible input has no name, so the
+text on screen is not sent. The value is empty until the user picks a row, and
+it is empty again as soon as the text changes after a pick. `required` still
+checks only that the visible input has some text.
+
 ## Why it holds at scale
 
-| Pressure                         | What protects us                                      | Test that proves it                                                       |
-| -------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------- |
-| The user types very fast         | Debounce: one request after the user pauses           | `sends one request when the user types 200 characters`                    |
-| An old response arrives late     | The old request is aborted and its answer is ignored  | `ignores an old response that arrives after a newer one`                  |
-| The same text is typed again     | LRU cache: no network call                            | `answers a repeated query from the cache without a new request`           |
-| The server sends 5,000 items     | We keep and draw only 10                              | `draws only 10 rows when the server sends 5,000 items`                    |
-| A new search is still loading    | The old rows are dimmed and cannot be picked          | `Enter does not pick a stale row`                                         |
-| The user searches all day        | The cache holds at most 50 queries of 10 items each   | `never holds more than its limit, even after 10,000 different keys`       |
-| The page stays open all day      | A cached answer expires after 5 minutes               | `asks the server again when the cached answer is older than five minutes` |
-| The user pastes a very long text | The query is cut to 100 characters                    | `cuts the query to 100 characters before searching`                       |
-| Many teams use the component     | Text, rows, form props and class name come from props | `keeps the English text for every message that is not translated`         |
+| Pressure                         | What protects us                                         | Test that proves it                                                       |
+| -------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------- |
+| The user types very fast         | Debounce: one request after the user pauses              | `sends one request when the user types 200 characters`                    |
+| An old response arrives late     | The old request is aborted and its answer is ignored     | `ignores an old response that arrives after a newer one`                  |
+| The same text is typed again     | LRU cache: no network call                               | `answers a repeated query from the cache without a new request`           |
+| The server sends 5,000 items     | We keep and draw only 10                                 | `draws only 10 rows when the server sends 5,000 items`                    |
+| A new search is still loading    | The old rows are dimmed and cannot be picked             | `Enter does not pick a stale row`                                         |
+| The user searches all day        | The cache holds at most 50 queries of 10 items each      | `never holds more than its limit, even after 10,000 different keys`       |
+| The page stays open all day      | A cached answer expires after 5 minutes                  | `asks the server again when the cached answer is older than five minutes` |
+| The user pastes a very long text | The query is cut to 100 characters                       | `cuts the query to 100 characters before searching`                       |
+| Many teams use the component     | Text, rows, form props and class name come from props    | `keeps the English text for every message that is not translated`         |
+| A form needs an ID, not a label  | `name` sends the key of the picked row in a hidden input | `sends the key of the picked item, not the text on screen`                |
 
 ## Edge cases covered
 
@@ -90,6 +118,7 @@ That is about 55 minutes of typing for someone who has practised it. The other
 - No results shows a clear message.
 - Enter while typing in a Hindi, Japanese or Chinese keyboard does not select. This also holds in Safari, which sends that Enter in a different way.
 - Enter with no active row does not select, so a form around the input can submit.
+- Enter while the old rows are still on screen for a new search: nothing is picked, and a form around the input is not submitted with a text the user has not finished.
 - The list becomes shorter while a row is active: the active row is dropped.
 - ArrowDown and ArrowUp do nothing when the list is empty or shows an error.
 - Clicking a row works even though the click takes focus away from the input.
@@ -101,6 +130,8 @@ That is about 55 minutes of typing for someone who has practised it. The other
 - High-contrast mode (forced colours): the active row is still marked, with a bar in the system highlight colour.
 - The parent controls the text and ignores a change: the text does not change.
 - The parent clears the text from outside: the list closes.
+- The form gets the key of the picked row, not the text on screen. A text that was typed but not picked sends an empty value.
+- The user picks a row, then types the same label by hand: the form value stays empty until they pick again.
 - Reading a cached answer does not make it live longer.
 - Only some messages are translated: the others stay in English.
 - A custom row is drawn, but the input still gets the plain label after a selection.

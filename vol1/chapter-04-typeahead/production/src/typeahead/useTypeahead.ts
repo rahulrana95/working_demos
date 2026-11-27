@@ -7,14 +7,16 @@
  *   3. A request that takes too long is aborted and becomes an error.
  *   4. The error has a reason: failed, timeout or offline. We always send
  *      the request. Offline is only the reason we give after it failed.
- *   5. When the server says "try later", we wait and try once more.
- *   6. Typeaheads with the same `cacheKey` share one cache.
+ *   5. When the server says "try later", we wait and try once more. If it
+ *      asks for more than 2 seconds, we do not wait and show the error.
+ *   6. Typeaheads with the same `cacheKey` share one cache. A new key gives
+ *      a new cache, also on a typeahead that is already on the page.
  *   7. Events tell analytics what happened, without the typed text.
  *   8. `isSearchingSlow` lets the component hide "Searching…" for a fast answer.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LruCache } from "./lruCache";
-import { RetryLaterError } from "./retryLaterError";
+import { MAX_RETRY_WAIT_MS, RetryLaterError } from "./retryLaterError";
 import { getSharedCache } from "./sharedCache";
 import { countGraphemes, normaliseQuery } from "./text";
 import type { SearchFn, TypeaheadErrorReason, TypeaheadEvent, TypeaheadResult } from "./types";
@@ -103,11 +105,17 @@ export function useTypeahead<T>({
     onEventRef.current = onEvent;
   }, [search, onEvent]);
 
-  // useState with a function picks the cache once, on the first render.
-  const [cache] = useState(() =>
-    cacheKey === undefined
-      ? new LruCache<T[]>(cacheSize, cacheTtlMs)
-      : getSharedCache<T[]>(cacheKey, cacheSize, cacheTtlMs),
+  // useMemo, not useState: a team changes `cacheKey` to drop old answers, for
+  // example when the search function changes. The cache must then change on
+  // a typeahead that is already on the page. React may forget a memo value.
+  // That is safe here: a shared cache is found again by its key, and a
+  // private cache starts empty, which costs one more request.
+  const cache = useMemo(
+    () =>
+      cacheKey === undefined
+        ? new LruCache<T[]>(cacheSize, cacheTtlMs)
+        : getSharedCache<T[]>(cacheKey, cacheSize, cacheTtlMs),
+    [cacheKey, cacheSize, cacheTtlMs],
   );
 
   useEffect(() => {
@@ -187,7 +195,11 @@ export function useTypeahead<T>({
         // The server is busy and told us when to come back. We stay in
         // "loading", wait, and try one more time. Only one, so a server
         // in trouble does not get a second wave of requests from us.
-        if (canRetryLater && error instanceof RetryLaterError) {
+        // A longer wait than the limit is not worth it: the user would look
+        // at a loading state for too long, so they get the error at once.
+        const canWait = error instanceof RetryLaterError && error.retryAfterMs <= MAX_RETRY_WAIT_MS;
+
+        if (canRetryLater && canWait) {
           waitTimerId = setTimeout(() => requestItems(false), error.retryAfterMs);
           return;
         }
