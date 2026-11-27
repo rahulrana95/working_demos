@@ -23,6 +23,20 @@ git diff --no-index 45-minutes/src 60-minutes/src
 git diff --no-index 60-minutes/src production/src
 ```
 
+## The three folders in numbers
+
+Lines of code are the lines in `src/typeahead`, without tests, blank lines and
+comments. The size is the component code without React, minified and compressed
+with gzip. Each folder's README has the command that measures it. For the two
+interview answers the lines are the files you write in the interview, so
+without `index.ts` (4 and 6 lines). For `production` they are all nine files.
+
+| Folder       | Tests | Lines of code | Size (min + gzip) |
+| ------------ | ----- | ------------- | ----------------- |
+| `45-minutes` | 58    | 303           | 1,813 bytes       |
+| `60-minutes` | 90    | 382           | 2,154 bytes       |
+| `production` | 154   | 577           | 3,143 bytes       |
+
 ## What the extra 15 minutes buys
 
 The 45-minute answer works well on one page, for one team. The 60-minute answer
@@ -46,14 +60,18 @@ The `production` folder is what a team builds after the interview, in about a
 week. Do not try to write it in an interview. Know that it exists, and name
 one or two of these when the interviewer asks, "What would you do next?"
 
-| Addition                             | Why it matters                                                                            |
-| ------------------------------------ | ----------------------------------------------------------------------------------------- |
-| Text cleaning (`normaliseQuery`)     | The same search always gives the same cache key and the same URL, so a CDN can answer it. |
-| `minChars` counts visible characters | One Hindi character or one emoji is one character, as the user sees it.                   |
-| Request timeout (`timeoutMs`)        | A request that never answers becomes an error the user can retry.                         |
-| Error reasons (`errorReason`)        | The user reads "You are offline." and the search runs again when the network is back.     |
-| Rate limit (`RetryLaterError`)       | We wait as long as the server asks, and try once more.                                    |
-| Shared cache (`cacheKey`)            | Two typeaheads on one page do not ask the server the same thing twice.                    |
-| Events (`onEvent`)                   | The team can measure speed and failures. The typed text is never in an event.             |
+| Addition                             | Why it matters                                                                                                          |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| Text cleaning (`normaliseQuery`)     | The same search always gives the same cache key and the same URL, so a CDN can answer it.                               |
+| `minChars` counts visible characters | One Hindi character or one emoji is one character, as the user sees it.                                                 |
+| Request timeout (`timeoutMs`)        | A request that never answers becomes an error the user can retry.                                                       |
+| Error reasons (`errorReason`)        | The user reads "You are offline." and the search runs again when the network is back. The request is always sent first. |
+| Rate limit (`RetryLaterError`)       | We wait as long as the server asks, and try once more.                                                                  |
+| Shared cache (`cacheKey`)            | Two typeaheads on one page do not ask the server the same thing twice.                                                  |
+| Events (`onEvent`)                   | The team can measure speed and failures. The typed text is never in an event.                                           |
+| Honest timing (`durationMs`)         | The time runs from the last key press to the rows being painted, for cache hits too.                                    |
+| No flash (`searchingDelayMs`)        | A fast answer never shows "Searching…".                                                                                 |
+| Form value (`name`)                  | The form gets the key of the picked item, not the text on screen.                                                       |
+| Plural forms (`Intl.PluralRules`)    | The result count is worded by the plural rules of the language.                                                         |
 
 The [production README](production/README.md) names the test that proves each one.

@@ -19,6 +19,11 @@ export interface TypeaheadMessages {
   resultsAvailable: (count: number) => string;
 }
 
+// English has two forms: "one" for 1 and "other" for the rest. We ask the
+// browser which one fits and do not write the rule ourselves, so a
+// translation can copy this code and only change the language and the texts.
+const englishPlurals = new Intl.PluralRules("en");
+
 export const DEFAULT_MESSAGES: TypeaheadMessages = {
   searching: "Searching…",
   noResults: (query) => `No results for “${query}”`,
@@ -26,5 +31,8 @@ export const DEFAULT_MESSAGES: TypeaheadMessages = {
   offline: "You are offline.",
   timeout: "The search took too long.",
   retry: "Try again",
-  resultsAvailable: (count) => (count === 1 ? "1 result available" : `${count} results available`),
+  resultsAvailable: (count) =>
+    englishPlurals.select(count) === "one"
+      ? `${count} result available`
+      : `${count} results available`,
 };

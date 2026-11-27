@@ -5,10 +5,12 @@
  *      text sent to the server, so a CDN sees one URL for one query.
  *   2. `minChars` counts what the user sees, not UTF-16 code units.
  *   3. A request that takes too long is aborted and becomes an error.
- *   4. The error has a reason: failed, timeout or offline.
+ *   4. The error has a reason: failed, timeout or offline. We always send
+ *      the request. Offline is only the reason we give after it failed.
  *   5. When the server says "try later", we wait and try once more.
  *   6. Typeaheads with the same `cacheKey` share one cache.
  *   7. Events tell analytics what happened, without the typed text.
+ *   8. `isSearchingSlow` lets the component hide "Searching…" for a fast answer.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LruCache } from "./lruCache";
@@ -33,10 +35,12 @@ export interface UseTypeaheadOptions<T> {
   cacheTtlMs?: number;
   /** A longer query is cut to this many characters before searching. */
   maxQueryLength?: number;
-  /** The language used to make the text lower case. The default is the browser language. */
+  /** The language used to split the text into characters. The default is the browser language. */
   locale?: string;
   /** A request that takes longer than this is aborted. */
   timeoutMs?: number;
+  /** `isSearchingSlow` becomes true when a request has taken longer than this. */
+  searchingDelayMs?: number;
   /**
    * Typeaheads with the same key share one cache. Use one key for one search
    * function only. Leave it out and this typeahead keeps its own cache.
@@ -48,11 +52,22 @@ export interface UseTypeaheadOptions<T> {
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
+/** What a `results_shown` event needs. It is sent after the rows are painted. */
+interface ShownResult {
+  queryLength: number;
+  count: number;
+  fromCache: boolean;
+  /** When the user last changed the text. */
+  typedAt: number;
+}
+
 export interface UseTypeaheadReturn<T> extends TypeaheadResult<T> {
   /** Runs the last query again. Used by the "Try again" button. */
   retry: () => void;
   /** True while the rows on screen belong to an older query. They must not be picked. */
   isStale: boolean;
+  /** True while a request has been in flight for longer than `searchingDelayMs`. */
+  isSearchingSlow: boolean;
 }
 
 export function useTypeahead<T>({
@@ -66,6 +81,7 @@ export function useTypeahead<T>({
   maxQueryLength = 100,
   locale,
   timeoutMs = 5000,
+  searchingDelayMs = 300,
   cacheKey,
   onEvent,
 }: UseTypeaheadOptions<T>): UseTypeaheadReturn<T> {
@@ -75,6 +91,8 @@ export function useTypeahead<T>({
     errorReason: null,
   });
   const [attempt, setAttempt] = useState(0);
+  const [isSearchingSlow, setIsSearchingSlow] = useState(false);
+  const [shownResult, setShownResult] = useState<ShownResult | null>(null);
 
   // The parent may pass new functions on every render. We keep the latest
   // ones in refs, so a new function does not restart the search below.
@@ -93,8 +111,15 @@ export function useTypeahead<T>({
   );
 
   useEffect(() => {
-    const cleanQuery = normaliseQuery(query, locale).slice(0, maxQueryLength);
-    const queryLength = countGraphemes(cleanQuery);
+    // React runs this effect right after the key press that changed the text.
+    // So this is the time of the last key press, or of a click on "Try again".
+    const typedAt = Date.now();
+    const cleanQuery = normaliseQuery(query).slice(0, maxQueryLength);
+    const queryLength = countGraphemes(cleanQuery, locale);
+
+    // A new search starts: forget what the last one was still going to show or report.
+    setIsSearchingSlow(false);
+    setShownResult(null);
 
     if (queryLength < minChars) {
       setResult({ status: "idle", items: [], errorReason: null });
@@ -105,12 +130,20 @@ export function useTypeahead<T>({
       onEventRef.current?.(event);
     }
 
-    function showItems(items: T[], durationMs: number, fromCache: boolean) {
+    let slowTimerId: ReturnType<typeof setTimeout> | undefined;
+    let isShowingOfflineError = false;
+
+    function showItems(items: T[], fromCache: boolean) {
+      clearTimeout(slowTimerId);
       setResult({ status: "success", items, errorReason: null });
-      emit({ type: "results_shown", queryLength, count: items.length, durationMs, fromCache });
+      // A new object for every answer, so the effect that sends the
+      // `results_shown` event runs for every answer.
+      setShownResult({ queryLength, count: items.length, fromCache, typedAt });
     }
 
     function fail(reason: TypeaheadErrorReason) {
+      clearTimeout(slowTimerId);
+      isShowingOfflineError = reason === "offline";
       setResult({ status: "error", items: [], errorReason: reason });
       emit({ type: "search_failed", queryLength, reason });
     }
@@ -118,17 +151,8 @@ export function useTypeahead<T>({
     const cachedItems = cache.get(cleanQuery);
 
     if (cachedItems !== undefined) {
-      showItems(cachedItems, 0, true);
+      showItems(cachedItems, true);
       return;
-    }
-
-    // Without a network the request can only fail, so we do not send it.
-    // When the network is back, the search runs again by itself.
-    if (navigator.onLine === false) {
-      fail("offline");
-      const searchAgain = () => setAttempt((count) => count + 1);
-      window.addEventListener("online", searchAgain);
-      return () => window.removeEventListener("online", searchAgain);
     }
 
     // Keep the old items on screen while the new ones load.
@@ -136,7 +160,6 @@ export function useTypeahead<T>({
     setResult((previous) => ({ status: "loading", items: previous.items, errorReason: null }));
 
     const controller = new AbortController();
-    let startedAt = 0;
     let timeoutTimerId: ReturnType<typeof setTimeout> | undefined;
 
     async function requestItems(canRetryLater: boolean) {
@@ -155,7 +178,7 @@ export function useTypeahead<T>({
 
         const items = response.slice(0, maxItems);
         cache.set(cleanQuery, items);
-        showItems(items, Date.now() - startedAt, false);
+        showItems(items, false);
       } catch (error) {
         if (controller.signal.aborted) {
           return;
@@ -169,8 +192,12 @@ export function useTypeahead<T>({
           return;
         }
 
+        // `navigator.onLine` is only a hint. A browser can say "offline" on a
+        // network that works, and "online" behind a Wi-Fi login page. So we
+        // never use it to stop a request. We only use it now, after the
+        // request has failed, to tell the user the most likely reason.
         // A failed request is not cached, so the next attempt asks the server again.
-        fail("failed");
+        fail(navigator.onLine === false ? "offline" : "failed");
       } finally {
         clearTimeout(timeoutTimerId);
       }
@@ -178,10 +205,19 @@ export function useTypeahead<T>({
 
     // First this timer waits for the debounce. Later it may wait for the retry.
     let waitTimerId = setTimeout(() => {
-      startedAt = Date.now();
       emit({ type: "search_started", queryLength });
+      slowTimerId = setTimeout(() => setIsSearchingSlow(true), searchingDelayMs);
       requestItems(true);
     }, debounceMs);
+
+    // The browser tells us the network is back. If the user is looking at
+    // the offline error, we search again, so they do not have to.
+    function searchAgainAfterOffline() {
+      if (isShowingOfflineError) {
+        setAttempt((count) => count + 1);
+      }
+    }
+    window.addEventListener("online", searchAgainAfterOffline);
 
     // This runs when the query changes or the component is removed.
     // It cancels every waiting timer and the request already in flight,
@@ -189,9 +225,40 @@ export function useTypeahead<T>({
     return () => {
       clearTimeout(waitTimerId);
       clearTimeout(timeoutTimerId);
+      clearTimeout(slowTimerId);
+      window.removeEventListener("online", searchAgainAfterOffline);
       controller.abort();
     };
-  }, [query, attempt, minChars, maxItems, maxQueryLength, locale, timeoutMs, debounceMs, cache]);
+  }, [
+    query,
+    attempt,
+    minChars,
+    maxItems,
+    maxQueryLength,
+    locale,
+    timeoutMs,
+    searchingDelayMs,
+    debounceMs,
+    cache,
+  ]);
+
+  // Sends `results_shown` when the user can really see the rows. An effect
+  // runs after React has put the rows in the page, and the browser paints
+  // them in the next frame. So the time in the event is what the user felt.
+  useEffect(() => {
+    if (shownResult === null) {
+      return;
+    }
+
+    const { typedAt, ...numbers } = shownResult;
+    const frameId = requestAnimationFrame(() => {
+      const durationMs = Date.now() - typedAt;
+      onEventRef.current?.({ type: "results_shown", ...numbers, durationMs });
+    });
+
+    // New rows replaced these ones before the browser painted them.
+    return () => cancelAnimationFrame(frameId);
+  }, [shownResult]);
 
   const retry = useCallback(() => {
     setAttempt((count) => count + 1);
@@ -200,5 +267,5 @@ export function useTypeahead<T>({
   // While loading, any items we still hold came from an earlier query.
   const isStale = result.status === "loading" && result.items.length > 0;
 
-  return { ...result, retry, isStale };
+  return { ...result, retry, isStale, isSearchingSlow };
 }

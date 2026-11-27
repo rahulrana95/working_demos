@@ -1,6 +1,8 @@
 /*
  * NOT PART OF THE INTERVIEW: production version.
- * The first part is the tests of the 60-minute answer, not changed.
+ * The first part is the tests of the 60-minute answer. Three things differ:
+ * "Searching…" is shown after a short wait, `name` sends the key of the
+ * picked item, and the tests wait one frame for a `results_shown` event.
  * The second part, from "clean text" on, tests the production features.
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -13,6 +15,10 @@ import { clearSharedCaches } from "./sharedCache";
 import type { SearchFn, TypeaheadEvent } from "./types";
 
 const DEBOUNCE_MS = 250;
+/** The default of `searchingDelayMs`. */
+const SEARCHING_DELAY_MS = 300;
+/** The fake clock paints 60 frames in a second, like most screens. */
+const FRAME_MS = 16;
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -74,7 +80,18 @@ function getOptionTexts(): string[] {
 }
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  // The frame functions are in the list, so a test can wait for a "paint".
+  vi.useFakeTimers({
+    toFake: [
+      "setTimeout",
+      "clearTimeout",
+      "setInterval",
+      "clearInterval",
+      "Date",
+      "requestAnimationFrame",
+      "cancelAnimationFrame",
+    ],
+  });
 });
 
 afterEach(() => {
@@ -139,9 +156,40 @@ describe("Typeahead: searching", () => {
     const { input, type } = renderTypeahead(() => pending.promise);
 
     await typeAndWait(type, "mu");
+    await wait(SEARCHING_DELAY_MS);
 
     expect(screen.getByText("Searching…", { selector: "p" })).toBeVisible();
     expect(input).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("does not read “Searching” to screen readers on every key press", async () => {
+    const pending = createDeferred<string[]>();
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(["Mumbai", "Munnar"])
+      .mockReturnValue(pending.promise);
+    const { type } = renderTypeahead(search);
+
+    // First search in flight: nothing has settled, so nothing is read.
+    type("mu");
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    await wait(DEBOUNCE_MS);
+    expect(screen.getByRole("status")).toHaveTextContent("2 results available");
+
+    // Second search in flight, with the old rows still on screen.
+    await typeAndWait(type, "mum");
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+
+    pending.resolve(["Mumbai"]);
+    await wait(0);
+    expect(screen.getByRole("status")).toHaveTextContent("1 result available");
+  });
+
+  it("tells a phone keyboard to show a search key and not to start with a capital letter", () => {
+    const { input } = renderTypeahead(vi.fn().mockResolvedValue([]));
+
+    expect(input).toHaveAttribute("enterkeyhint", "search");
+    expect(input).toHaveAttribute("autocapitalize", "off");
   });
 
   it("shows a message when the server returns nothing", async () => {
@@ -465,6 +513,16 @@ describe("Typeahead: keyboard", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it("ignores the Enter that Safari sends with key code 229 at the end of an IME word", async () => {
+    const { input, press, onSelect } = await openWithThreeCities();
+
+    press("ArrowDown");
+    fireEvent.keyDown(input, { key: "Enter", isComposing: false, keyCode: 229 });
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(input).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("closes the list on the first Escape and clears the text on the second", async () => {
     const { input, press } = await openWithThreeCities();
 
@@ -548,14 +606,29 @@ describe("Typeahead: mouse and focus", () => {
     expect(mouseDown.defaultPrevented).toBe(true);
   });
 
-  it("makes the option under the mouse active", async () => {
+  it("makes the option active when the mouse moves over it", async () => {
     const search = vi.fn().mockResolvedValue(["Mumbai", "Munnar"]);
     const { type } = renderTypeahead(search);
     await typeAndWait(type, "mu");
 
-    fireEvent.mouseEnter(screen.getByRole("option", { name: "Munnar" }));
+    fireEvent.mouseMove(screen.getByRole("option", { name: "Munnar" }));
 
     expect(screen.getByRole("option", { name: "Munnar" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps the keyboard choice when the list is drawn under a mouse that is not moving", async () => {
+    const search = vi.fn().mockResolvedValue(["Mumbai", "Munnar"]);
+    const { type, press } = renderTypeahead(search);
+    await typeAndWait(type, "mu");
+    press("ArrowDown");
+
+    // The browser sends "mouse enter" to a new row under a still mouse, but no "mouse move".
+    const rowUnderMouse = screen.getByRole("option", { name: "Munnar" });
+    fireEvent.mouseEnter(rowUnderMouse);
+    fireEvent.mouseOver(rowUnderMouse);
+
+    expect(screen.getByRole("option", { name: "Mumbai" })).toHaveAttribute("aria-selected", "true");
+    expect(rowUnderMouse).toHaveAttribute("aria-selected", "false");
   });
 
   it("closes the list when the input loses focus", async () => {
@@ -567,6 +640,63 @@ describe("Typeahead: mouse and focus", () => {
 
     expect(input).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+});
+
+describe("Typeahead: “Try again” with the keyboard", () => {
+  /** Focuses the input and types a text that the server fails to answer. */
+  async function showErrorWithFocusInInput() {
+    const search = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Server is down"))
+      .mockResolvedValueOnce(["Mumbai"]);
+    const utils = renderTypeahead(search);
+
+    utils.input.focus();
+    await typeAndWait(utils.type, "mum");
+
+    return { ...utils, search, retryButton: screen.getByRole("button", { name: "Try again" }) };
+  }
+
+  it("keeps the error open when focus moves from the input to “Try again”", async () => {
+    const { retryButton } = await showErrorWithFocusInInput();
+
+    // This is what Tab does: the input loses focus, and the button gets it.
+    act(() => retryButton.focus());
+
+    expect(retryButton).toBeVisible();
+    expect(retryButton).toHaveFocus();
+    expect(screen.getByRole("alert")).toBeVisible();
+  });
+
+  it("keeps the error open when the blur event names “Try again” as the next element", async () => {
+    const { input, retryButton } = await showErrorWithFocusInInput();
+
+    fireEvent.blur(input, { relatedTarget: retryButton });
+
+    expect(retryButton).toBeVisible();
+  });
+
+  it("searches again on “Try again” and puts focus back in the input", async () => {
+    const { input, search, retryButton } = await showErrorWithFocusInInput();
+    act(() => retryButton.focus());
+
+    // Enter on a focused button is a click.
+    fireEvent.click(retryButton);
+    await wait(DEBOUNCE_MS);
+
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(input).toHaveFocus();
+    expect(getOptionTexts()).toEqual(["Mumbai"]);
+  });
+
+  it("closes the error when focus leaves “Try again” for another part of the page", async () => {
+    const { retryButton } = await showErrorWithFocusInInput();
+    act(() => retryButton.focus());
+
+    act(() => retryButton.blur());
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 
@@ -713,11 +843,10 @@ describe("Typeahead: text controlled by the parent", () => {
 });
 
 describe("Typeahead: inside a form", () => {
-  it("passes name, required and disabled to the input", () => {
+  it("passes required and disabled to the input", () => {
     const search = vi.fn().mockResolvedValue([]);
-    const { input } = renderTypeahead(search, { name: "city", required: true, disabled: true });
+    const { input } = renderTypeahead(search, { required: true, disabled: true });
 
-    expect(input).toHaveAttribute("name", "city");
     expect(input).toBeRequired();
     expect(input).toBeDisabled();
   });
@@ -738,25 +867,119 @@ describe("Typeahead: inside a form", () => {
     expect(ref.current).toBe(input);
   });
 
-  it("sends the typed text with the form under the given name", () => {
-    const search = vi.fn().mockResolvedValue([]);
-    render(
-      <form aria-label="Trip">
-        <Typeahead
-          label="City"
-          name="city"
-          search={search}
-          getItemLabel={(city: string) => city}
-          getItemKey={(city) => city}
-          onSelect={() => {}}
-        />
-      </form>,
-    );
+  describe("the value sent with the form", () => {
+    interface City {
+      id: string;
+      name: string;
+    }
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Pune" } });
+    const MUMBAI: City = { id: "bom", name: "Mumbai" };
 
-    const form = screen.getByRole("form", { name: "Trip" }) as HTMLFormElement;
-    expect(new FormData(form).get("city")).toBe("Pune");
+    function renderInForm(extraProps: Partial<TypeaheadProps<City>> = {}) {
+      render(
+        <form aria-label="Trip">
+          <Typeahead
+            label="City"
+            name="cityId"
+            search={vi.fn().mockResolvedValue([MUMBAI])}
+            getItemLabel={(city: City) => city.name}
+            getItemKey={(city) => city.id}
+            onSelect={() => {}}
+            debounceMs={DEBOUNCE_MS}
+            {...extraProps}
+          />
+        </form>,
+      );
+
+      const input = screen.getByRole("combobox");
+      const type = (text: string) => fireEvent.change(input, { target: { value: text } });
+      const form = screen.getByRole("form", { name: "Trip" }) as HTMLFormElement;
+      const getFormValues = () => Array.from(new FormData(form).entries());
+
+      return { input, type, getFormValues };
+    }
+
+    async function pickMumbai(type: (text: string) => void) {
+      await typeAndWait(type, "mum");
+      fireEvent.click(screen.getByRole("option", { name: "Mumbai" }));
+    }
+
+    it("sends the key of the picked item, not the text on screen", async () => {
+      const { input, type, getFormValues } = renderInForm();
+
+      await pickMumbai(type);
+
+      expect(input).toHaveValue("Mumbai");
+      expect(getFormValues()).toEqual([["cityId", "bom"]]);
+    });
+
+    it("sends an empty value for a text that was typed but not picked", async () => {
+      const { type, getFormValues } = renderInForm();
+
+      await typeAndWait(type, "mum");
+
+      expect(getFormValues()).toEqual([["cityId", ""]]);
+    });
+
+    it("clears the value when the user edits the text after a pick", async () => {
+      const { type, getFormValues } = renderInForm();
+      await pickMumbai(type);
+
+      type("Mumba");
+      expect(getFormValues()).toEqual([["cityId", ""]]);
+
+      // The same text again is still not a pick. The user must pick a row.
+      type("Mumbai");
+      expect(getFormValues()).toEqual([["cityId", ""]]);
+
+      await wait(DEBOUNCE_MS);
+      fireEvent.click(screen.getByRole("option", { name: "Mumbai" }));
+      expect(getFormValues()).toEqual([["cityId", "bom"]]);
+    });
+
+    it("clears the value when the parent changes the text from outside", async () => {
+      function ControlledField() {
+        const [text, setText] = useState("");
+        return (
+          <form aria-label="Trip">
+            <Typeahead
+              label="City"
+              name="cityId"
+              value={text}
+              onValueChange={setText}
+              search={vi.fn().mockResolvedValue([MUMBAI])}
+              getItemLabel={(city: City) => city.name}
+              getItemKey={(city) => city.id}
+              onSelect={() => {}}
+              debounceMs={DEBOUNCE_MS}
+            />
+            <button type="button" onClick={() => setText("")}>
+              Reset
+            </button>
+          </form>
+        );
+      }
+      render(<ControlledField />);
+      const form = screen.getByRole("form", { name: "Trip" }) as HTMLFormElement;
+      fireEvent.change(screen.getByRole("combobox"), { target: { value: "mum" } });
+      await wait(DEBOUNCE_MS);
+      fireEvent.click(screen.getByRole("option", { name: "Mumbai" }));
+      expect(new FormData(form).get("cityId")).toBe("bom");
+
+      fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+
+      expect(new FormData(form).get("cityId")).toBe("");
+    });
+
+    it("sends nothing when no name is given", () => {
+      const { getFormValues } = renderInForm({ name: undefined });
+      expect(getFormValues()).toEqual([]);
+    });
+
+    it("sends nothing while the field is disabled", () => {
+      const { getFormValues } = renderInForm({ disabled: true });
+      expect(getFormValues()).toEqual([]);
+    });
   });
 });
 
@@ -804,9 +1027,11 @@ describe("Typeahead: translated messages", () => {
     const { type } = renderTypeahead(() => pending.promise, { messages: HINDI });
 
     await typeAndWait(type, "mu");
+    await wait(SEARCHING_DELAY_MS);
 
     expect(screen.getByText("खोज रहे हैं…", { selector: "p" })).toBeVisible();
-    expect(screen.getByRole("status")).toHaveTextContent("खोज रहे हैं…");
+    // Only people who can see the page get it. Screen readers hear the outcome.
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("shows the translated message for no results, with the query inside", async () => {
@@ -977,13 +1202,15 @@ describe("Typeahead: clean text", () => {
     expect(search).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the lower case rules of the language given in locale", async () => {
-    const search = vi.fn().mockResolvedValue(["Isparta"]);
+  it("sends “indore” for “INDORE” when the language is Turkish", async () => {
+    // Turkish lower case would give "ındore", with a dotless "ı": another
+    // cache key and another URL for the same city.
+    const search = vi.fn().mockResolvedValue(["Indore"]);
     const { type } = renderTypeahead(search, { locale: "tr" });
 
-    await typeAndWait(type, "ISPARTA");
+    await typeAndWait(type, "INDORE");
 
-    expect(search).toHaveBeenCalledWith("ısparta", expect.any(AbortSignal));
+    expect(search).toHaveBeenCalledWith("indore", expect.any(AbortSignal));
   });
 });
 
@@ -1099,20 +1326,58 @@ describe("Typeahead: offline", () => {
     vi.restoreAllMocks();
   });
 
-  it("does not call the server and tells the user they are offline", async () => {
+  it("sends the request when the browser says it is offline, because that is only a hint", async () => {
     setOnline(false);
     const search = vi.fn().mockResolvedValue(["Mumbai"]);
     const { type } = renderTypeahead(search);
 
     await typeAndWait(type, "mum");
 
-    expect(search).not.toHaveBeenCalled();
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(getOptionTexts()).toEqual(["Mumbai"]);
+  });
+
+  it("tells the user they are offline when the request fails without a network", async () => {
+    setOnline(false);
+    const search = vi.fn().mockRejectedValue(new Error("Failed to fetch"));
+    const { type } = renderTypeahead(search);
+
+    await typeAndWait(type, "mum");
+
+    expect(search).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("alert")).toHaveTextContent("You are offline.");
+  });
+
+  it("gives the normal error when the request fails with a network", async () => {
+    setOnline(true);
+    const search = vi.fn().mockRejectedValue(new Error("Server is down"));
+    const { type } = renderTypeahead(search);
+
+    await typeAndWait(type, "mum");
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Something went wrong.");
   });
 
   it("searches again by itself when the network comes back", async () => {
     setOnline(false);
-    const search = vi.fn().mockResolvedValue(["Mumbai"]);
+    const search = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Failed to fetch"))
+      .mockResolvedValue(["Mumbai"]);
+    const { type } = renderTypeahead(search);
+    await typeAndWait(type, "mum");
+
+    comeBackOnline();
+    await wait(DEBOUNCE_MS);
+
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(getOptionTexts()).toEqual(["Mumbai"]);
+  });
+
+  it("does not search again by itself when the error was not about the network", async () => {
+    const search = vi.fn().mockRejectedValue(new Error("Server is down"));
     const { type } = renderTypeahead(search);
     await typeAndWait(type, "mum");
 
@@ -1120,7 +1385,22 @@ describe("Typeahead: offline", () => {
     await wait(DEBOUNCE_MS);
 
     expect(search).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Something went wrong.");
+  });
+
+  it('sends the request on "Try again" while the browser still says it is offline', async () => {
+    setOnline(false);
+    const search = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Failed to fetch"))
+      .mockResolvedValue(["Mumbai"]);
+    const { type } = renderTypeahead(search);
+    await typeAndWait(type, "mum");
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await wait(DEBOUNCE_MS);
+
+    expect(search).toHaveBeenCalledTimes(2);
     expect(getOptionTexts()).toEqual(["Mumbai"]);
   });
 
@@ -1139,7 +1419,7 @@ describe("Typeahead: offline", () => {
 
   it("does not search when the network comes back after the text was cleared", async () => {
     setOnline(false);
-    const search = vi.fn().mockResolvedValue(["Mumbai"]);
+    const search = vi.fn().mockRejectedValue(new Error("Failed to fetch"));
     const { type } = renderTypeahead(search);
     await typeAndWait(type, "mum");
     type("");
@@ -1147,13 +1427,17 @@ describe("Typeahead: offline", () => {
     comeBackOnline();
     await wait(DEBOUNCE_MS);
 
-    expect(search).not.toHaveBeenCalled();
+    expect(search).toHaveBeenCalledTimes(1);
   });
 
   it("shows the translated offline and timeout messages", async () => {
     setOnline(false);
     const pending = createDeferred<string[]>();
-    const { type } = renderTypeahead(() => pending.promise, {
+    const search = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Failed to fetch"))
+      .mockReturnValue(pending.promise);
+    const { type } = renderTypeahead(search, {
       messages: { offline: "आप ऑफ़लाइन हैं।", timeout: "खोज में बहुत समय लग गया।" },
     });
     await typeAndWait(type, "mum");
@@ -1328,29 +1612,77 @@ describe("Typeahead: events", () => {
     return () => new Promise((resolve) => setTimeout(() => resolve(items), ms));
   }
 
-  it("reports the start of a search and the result, with how long it took", async () => {
-    const { type, events } = renderWithEvents(answerAfter(120, ["Mumbai", "Munnar"]));
+  it("reports the result after the rows are painted, with the time since the last key press", async () => {
+    const { type, events } = renderWithEvents(answerAfter(100, ["Mumbai", "Munnar"]));
 
     await typeAndWait(type, "mu");
-    await wait(120);
+    await wait(100);
 
+    // The rows are in the page, but the browser has not painted them yet.
+    expect(getOptionTexts()).toEqual(["Mumbai", "Munnar"]);
+    expect(events).toEqual([{ type: "search_started", queryLength: 2 }]);
+
+    await wait(FRAME_MS);
+
+    // 250 ms debounce + 100 ms server = 350 ms. The next frame is at 352 ms.
     expect(events).toEqual([
       { type: "search_started", queryLength: 2 },
-      { type: "results_shown", queryLength: 2, count: 2, durationMs: 120, fromCache: false },
+      { type: "results_shown", queryLength: 2, count: 2, durationMs: 352, fromCache: false },
     ]);
   });
 
-  it("reports an answer from the cache, with no new search", async () => {
+  it("counts the time from the last key press, not from the first", async () => {
+    const { type, events } = renderWithEvents(answerAfter(100, ["Mumbai"]));
+
+    type("mu");
+    await wait(160);
+    type("mum");
+    await wait(DEBOUNCE_MS + 100);
+    await wait(FRAME_MS);
+
+    // The last key press was at 160 ms. The rows are painted at 512 ms.
+    expect(events).toContainEqual({
+      type: "results_shown",
+      queryLength: 3,
+      count: 1,
+      durationMs: 352,
+      fromCache: false,
+    });
+  });
+
+  it("reports an answer from the cache after it is painted, with a small time that is not zero", async () => {
     const { type, events } = renderWithEvents(vi.fn().mockResolvedValue(["Mumbai"]));
     await typeAndWait(type, "mu");
     await typeAndWait(type, "mum");
+    await wait(FRAME_MS);
     events.length = 0;
 
     type("mu");
+    expect(events).toEqual([]);
+    await wait(FRAME_MS);
 
     expect(events).toEqual([
-      { type: "results_shown", queryLength: 2, count: 1, durationMs: 0, fromCache: true },
+      {
+        type: "results_shown",
+        queryLength: 2,
+        count: 1,
+        durationMs: expect.any(Number),
+        fromCache: true,
+      },
     ]);
+    const [shown] = events as Extract<TypeaheadEvent, { type: "results_shown" }>[];
+    expect(shown.durationMs).toBeGreaterThan(0);
+    expect(shown.durationMs).toBeLessThanOrEqual(FRAME_MS);
+  });
+
+  it("does not report rows that were replaced before the browser painted them", async () => {
+    const { type, events } = renderWithEvents(vi.fn().mockResolvedValue(["Mumbai"]));
+    await typeAndWait(type, "mu");
+
+    type("m");
+    await wait(FRAME_MS);
+
+    expect(events).toEqual([{ type: "search_started", queryLength: 2 }]);
   });
 
   it("reports a failed search with the reason “failed”", async () => {
@@ -1371,13 +1703,18 @@ describe("Typeahead: events", () => {
     expect(events).toContainEqual({ type: "search_failed", queryLength: 3, reason: "timeout" });
   });
 
-  it("reports a search without a network with the reason “offline”", async () => {
+  it("reports a search that failed without a network with the reason “offline”", async () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
-    const { type, events } = renderWithEvents(vi.fn().mockResolvedValue([]));
+    const { type, events } = renderWithEvents(
+      vi.fn().mockRejectedValue(new Error("Failed to fetch")),
+    );
 
     await typeAndWait(type, "mum");
 
-    expect(events).toEqual([{ type: "search_failed", queryLength: 3, reason: "offline" }]);
+    expect(events).toEqual([
+      { type: "search_started", queryLength: 3 },
+      { type: "search_failed", queryLength: 3, reason: "offline" },
+    ]);
     vi.restoreAllMocks();
   });
 
@@ -1390,10 +1727,12 @@ describe("Typeahead: events", () => {
 
     await typeAndWait(type, "mum");
     await wait(1000);
+    await wait(FRAME_MS);
 
+    // 250 ms debounce + 1000 ms wait = 1250 ms. The next frame is at 1264 ms.
     expect(events).toEqual([
       { type: "search_started", queryLength: 3 },
-      { type: "results_shown", queryLength: 3, count: 1, durationMs: 1000, fromCache: false },
+      { type: "results_shown", queryLength: 3, count: 1, durationMs: 1264, fromCache: false },
     ]);
   });
 
@@ -1429,7 +1768,9 @@ describe("Typeahead: events", () => {
 
     // One of each event: started, shown, shown from cache, selected, failed.
     await typeAndWait(type, secretText);
+    await wait(FRAME_MS);
     await typeAndWait(type, `${secretText} `);
+    await wait(FRAME_MS);
     fireEvent.click(screen.getByRole("option", { name: "Stone Town" }));
     await typeAndWait(type, `${secretText} north`);
 
@@ -1439,5 +1780,88 @@ describe("Typeahead: events", () => {
     for (const event of events) {
       expect(JSON.stringify(event).toLowerCase()).not.toContain(secretText.toLowerCase());
     }
+  });
+});
+
+describe("Typeahead: “Searching…” only for a slow search", () => {
+  /** A server that answers after the given time. */
+  function answerAfter(ms: number, items: string[]): SearchFn<string> {
+    return () => new Promise((resolve) => setTimeout(() => resolve(items), ms));
+  }
+
+  it("never shows the message when the answer comes in 100 ms", async () => {
+    const { type } = renderTypeahead(answerAfter(100, ["Mumbai"]));
+    type("mum");
+
+    // Look at every 10 ms until the rows are there.
+    for (let elapsed = 0; elapsed < DEBOUNCE_MS + 100; elapsed += 10) {
+      expect(screen.queryByText("Searching…")).not.toBeInTheDocument();
+      expect(document.querySelector(".typeahead__popup")).not.toBeVisible();
+      await wait(10);
+    }
+
+    expect(getOptionTexts()).toEqual(["Mumbai"]);
+    await wait(SEARCHING_DELAY_MS);
+    expect(screen.queryByText("Searching…")).not.toBeInTheDocument();
+  });
+
+  it("shows the message after 300 ms when the answer comes in 1000 ms", async () => {
+    const { input, type } = renderTypeahead(answerAfter(1000, ["Mumbai"]));
+    await typeAndWait(type, "mum");
+
+    await wait(SEARCHING_DELAY_MS - 1);
+    expect(screen.queryByText("Searching…")).not.toBeInTheDocument();
+    expect(input).toHaveAttribute("aria-busy", "true");
+
+    await wait(1);
+    expect(screen.getByText("Searching…")).toBeVisible();
+
+    await wait(1000 - SEARCHING_DELAY_MS);
+    expect(screen.queryByText("Searching…")).not.toBeInTheDocument();
+    expect(getOptionTexts()).toEqual(["Mumbai"]);
+  });
+
+  it("uses the time given in searchingDelayMs", async () => {
+    const { type } = renderTypeahead(answerAfter(1000, ["Mumbai"]), { searchingDelayMs: 50 });
+    await typeAndWait(type, "mum");
+
+    await wait(50);
+
+    expect(screen.getByText("Searching…")).toBeVisible();
+  });
+
+  it("starts the wait again for every new search", async () => {
+    const { type } = renderTypeahead(answerAfter(1000, []));
+    await typeAndWait(type, "mum");
+    await wait(SEARCHING_DELAY_MS);
+    expect(screen.getByText("Searching…")).toBeVisible();
+
+    await typeAndWait(type, "mumb");
+
+    expect(screen.queryByText("Searching…")).not.toBeInTheDocument();
+  });
+});
+
+describe("Typeahead: plural forms", () => {
+  it("asks Intl.PluralRules which English form fits the count", async () => {
+    const { type } = renderTypeahead(vi.fn().mockResolvedValue(["Mumbai", "Munnar"]));
+    const select = vi.spyOn(Intl.PluralRules.prototype, "select");
+
+    await typeAndWait(type, "mu");
+
+    expect(select).toHaveBeenCalledWith(2);
+    expect(screen.getByRole("status")).toHaveTextContent("2 results available");
+    select.mockRestore();
+  });
+
+  it("uses the form that the rules give, not a check for the number 1", async () => {
+    // French rules, to prove the choice comes from the rules: "one" also for 0.
+    vi.spyOn(Intl.PluralRules.prototype, "select").mockReturnValue("one");
+    const { type } = renderTypeahead(vi.fn().mockResolvedValue(["Mumbai", "Munnar"]));
+
+    await typeAndWait(type, "mu");
+
+    expect(screen.getByRole("status")).toHaveTextContent("2 result available");
+    vi.restoreAllMocks();
   });
 });

@@ -9,6 +9,8 @@ import type { City } from "./api/searchCities";
 import { Typeahead } from "./typeahead";
 import type { TypeaheadEvent, TypeaheadMessages } from "./typeahead";
 
+const hindiPlurals = new Intl.PluralRules("hi");
+
 const HINDI_MESSAGES: TypeaheadMessages = {
   searching: "खोज रहे हैं…",
   noResults: (query) => `“${query}” के लिए कोई नतीजा नहीं मिला`,
@@ -16,8 +18,9 @@ const HINDI_MESSAGES: TypeaheadMessages = {
   offline: "आप ऑफ़लाइन हैं।",
   timeout: "खोज में बहुत समय लग गया।",
   retry: "फिर से कोशिश करें",
-  // Hindi, like English, has a different form for one result.
-  resultsAvailable: (count) => (count === 1 ? "1 नतीजा उपलब्ध है" : `${count} नतीजे उपलब्ध हैं`),
+  // Hindi has the same two forms as English, but its own rule for when to use "one".
+  resultsAvailable: (count) =>
+    hindiPlurals.select(count) === "one" ? `${count} नतीजा उपलब्ध है` : `${count} नतीजे उपलब्ध हैं`,
 };
 
 const EVENTS_ON_SCREEN = 6;
@@ -155,7 +158,7 @@ export function App() {
         </ul>
         <p className="panel__hint">
           An event holds the length of the text, never the text. Turn the network off in the
-          developer tools to see the offline message.
+          developer tools and tick “Make the server fail” to see the offline message.
         </p>
       </section>
     </main>

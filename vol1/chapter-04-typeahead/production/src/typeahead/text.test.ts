@@ -14,13 +14,21 @@ describe("normaliseQuery", () => {
   });
 
   it("makes the text lower case", () => {
-    expect(normaliseQuery("New DELHI", "en")).toBe("new delhi");
+    expect(normaliseQuery("New DELHI")).toBe("new delhi");
   });
 
-  it("uses the lower case rules of the given language", () => {
-    // Turkish has two letters "i": with a dot and without a dot.
-    expect(normaliseQuery("ISPARTA", "tr")).toBe("ısparta");
-    expect(normaliseQuery("ISPARTA", "en")).toBe("isparta");
+  it("gives “indore” for “INDORE” in a Turkish browser too", () => {
+    // Turkish lower case turns "I" into "ı", a letter without a dot.
+    expect("INDORE".toLocaleLowerCase("tr")).toBe("ındore");
+
+    // In a Turkish browser, lower case without a named language is Turkish.
+    const turkishLowerCase = vi
+      .spyOn(String.prototype, "toLocaleLowerCase")
+      .mockImplementation(() => "ındore");
+
+    expect(normaliseQuery("INDORE")).toBe("indore");
+    expect(turkishLowerCase).not.toHaveBeenCalled();
+    turkishLowerCase.mockRestore();
   });
 
   it("gives one form to a letter that can be stored in two ways", () => {
@@ -53,6 +61,10 @@ describe("countGraphemes", () => {
   it("counts an emoji with a skin tone as 1", () => {
     expect("👍🏽".length).toBeGreaterThan(1);
     expect(countGraphemes("👍🏽")).toBe(1);
+  });
+
+  it("accepts the language of the text", () => {
+    expect(countGraphemes("दिल्ली", "hi")).toBe(2);
   });
 
   it("counts an empty text as 0", () => {

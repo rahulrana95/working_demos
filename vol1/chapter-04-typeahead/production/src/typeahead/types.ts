@@ -9,6 +9,17 @@
  *
  * It receives an AbortSignal. When the user types again, the signal is
  * aborted, so the function can cancel the network call.
+ *
+ * The typeahead never sees the HTTP status code. It only sees whether the
+ * promise resolves or rejects. So your `search` function must keep three rules:
+ *   a. For HTTP 429 ("too many requests"), reject with
+ *      `new RetryLaterError(retryAfterMs)`. The typeahead waits and tries once more.
+ *   b. For every other failure (500, 404, a broken connection, bad JSON),
+ *      reject with any other error. The user sees an error and "Try again".
+ *   c. Resolve with an empty array only when the server really found nothing.
+ *      The user then reads "No results", and that answer is kept in the cache.
+ * A function that returns `[]` for a failed request breaks rule c: the user
+ * is told that nothing exists, and the cache remembers it.
  */
 export type SearchFn<T> = (query: string, signal: AbortSignal) => Promise<T[]>;
 
@@ -36,6 +47,11 @@ export type TypeaheadEvent =
       type: "results_shown";
       queryLength: number;
       count: number;
+      /**
+       * From the user's last key press (or the retry that started this
+       * search) to the rows being painted. It holds the debounce wait and the drawing time,
+       * so it is small but not zero for an answer from the cache.
+       */
       durationMs: number;
       fromCache: boolean;
     }

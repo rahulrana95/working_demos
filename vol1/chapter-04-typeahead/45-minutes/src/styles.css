@@ -111,13 +111,38 @@ kbd {
 
 .typeahead__option {
   padding: 10px 12px;
+  /*
+   * Every row has a 3px bar that you cannot see, and 3px less padding on
+   * that side. So the text does not move when the bar gets its colour.
+   */
+  padding-inline-start: 9px;
+  border-inline-start: 3px solid transparent;
   cursor: pointer;
 }
 
 .typeahead__option.is-active {
   background: var(--color-accent-soft);
-  /* The bar keeps the active row visible in high-contrast mode and in print. */
-  box-shadow: inset 3px 0 0 var(--color-accent);
+  /*
+   * The bar is a real border, not a box-shadow. High-contrast mode and print
+   * remove shadows and background colours, but they keep borders.
+   */
+  border-inline-start-color: var(--color-accent);
+}
+
+/*
+ * High-contrast mode paints every border, a transparent one too. So there
+ * the bar of a normal row gets the colour of the page, and the bar of the
+ * active row gets the highlight colour. The browser keeps these two system
+ * colours as they are.
+ */
+@media (forced-colors: active) {
+  .typeahead__option {
+    border-inline-start-color: Canvas;
+  }
+
+  .typeahead__option.is-active {
+    border-inline-start-color: Highlight;
+  }
 }
 
 .typeahead__message {

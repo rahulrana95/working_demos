@@ -5,10 +5,13 @@
  *   2. One message for each error reason: failed, timeout, offline.
  *   3. `onEvent`, which also reports the row the user picked.
  *   4. `minChars` counts the characters the user sees.
+ *   5. `searchingDelayMs`: a fast search never shows "Searching…".
+ *   6. `name` sends the key of the picked item with the form, not the text.
  */
-import { forwardRef, useId, useState } from "react";
+import { forwardRef, useId, useImperativeHandle, useRef, useState } from "react";
 import type {
   ChangeEvent,
+  FocusEvent,
   ForwardedRef,
   KeyboardEvent,
   MouseEvent,
@@ -37,10 +40,15 @@ export interface TypeaheadProps<T> {
   maxItems?: number;
   cacheTtlMs?: number;
   maxQueryLength?: number;
-  /** The language used to make the text lower case. The default is the browser language. */
+  /** The language used to split the text into characters. The default is the browser language. */
   locale?: string;
   /** A request that takes longer than this is aborted. The default is 5000. */
   timeoutMs?: number;
+  /**
+   * "Searching…" is shown only when a request has taken longer than this.
+   * A fast answer then never makes the message flash. The default is 300.
+   */
+  searchingDelayMs?: number;
   /**
    * Typeaheads with the same key share one cache. Use one key for one search
    * function only. Leave it out and this typeahead keeps its own cache.
@@ -57,8 +65,13 @@ export interface TypeaheadProps<T> {
   /** Called every time the text changes: on typing, on select and on clear. */
   onValueChange?: (value: string) => void;
 
-  /** Form props. They go straight to the input element. */
+  /**
+   * With a name, a form gets the key of the picked item (from `getItemKey`)
+   * under that name. It gets an empty text while nothing is picked, also
+   * when the user has typed a text but picked no row.
+   */
   name?: string;
+  /** Form props. They go straight to the input element. */
   disabled?: boolean;
   required?: boolean;
 
@@ -87,6 +100,7 @@ function TypeaheadInner<T>(
     maxQueryLength,
     locale,
     timeoutMs,
+    searchingDelayMs,
     cacheKey,
     onEvent,
     value,
@@ -104,19 +118,29 @@ function TypeaheadInner<T>(
   const [ownValue, setOwnValue] = useState("");
   const inputValue = value ?? ownValue;
   const typedQuery = inputValue.trim();
-  const typedLength = countGraphemes(typedQuery);
+  const typedLength = countGraphemes(typedQuery, locale);
+
+  // The item the user picked last, for the form value.
+  const [picked, setPicked] = useState<{ key: string; label: string } | null>(null);
+  // The parent can change the text from outside, for example to reset a form.
+  // So the pick counts only while the input still shows the picked label.
+  const pickedKey = picked !== null && picked.label === inputValue ? picked.key : "";
 
   const text = { ...DEFAULT_MESSAGES, ...messages };
 
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(NO_ACTIVE_OPTION);
 
+  // We need the input ourselves, and the parent may ask for it through `ref`.
+  const inputRef = useRef<HTMLInputElement>(null);
+  useImperativeHandle(ref, () => inputRef.current as HTMLInputElement, []);
+
   // We search only while the list is open. After the user picks an item,
   // the input holds the full label, and we do not want one more request
   // for that label.
   const query = isOpen ? inputValue : "";
 
-  const { status, items, errorReason, retry, isStale } = useTypeahead({
+  const { status, items, errorReason, retry, isStale, isSearchingSlow } = useTypeahead({
     query,
     search,
     debounceMs,
@@ -126,6 +150,7 @@ function TypeaheadInner<T>(
     maxQueryLength,
     locale,
     timeoutMs,
+    searchingDelayMs,
     cacheKey,
     onEvent,
   });
@@ -135,7 +160,10 @@ function TypeaheadInner<T>(
   const listboxId = `${baseId}-listbox`;
   const getOptionId = (index: number) => `${baseId}-option-${index}`;
 
-  const isPopupVisible = isOpen && typedLength >= minChars;
+  // A fast first search has nothing to show yet: no rows and no message.
+  // We keep the popup closed, so the user does not see an empty box.
+  const isWaitingQuietly = status === "loading" && items.length === 0 && !isSearchingSlow;
+  const isPopupVisible = isOpen && typedLength >= minChars && !isWaitingQuietly;
   const isListVisible = isPopupVisible && items.length > 0 && status !== "error";
 
   // The list can become shorter while an option is active.
@@ -149,7 +177,9 @@ function TypeaheadInner<T>(
   }
 
   function selectItem(item: T, index: number) {
-    changeValue(getItemLabel(item));
+    const itemLabel = getItemLabel(item);
+    changeValue(itemLabel);
+    setPicked({ key: getItemKey(item), label: itemLabel });
     setIsOpen(false);
     setActiveIndex(NO_ACTIVE_OPTION);
     onSelect(item);
@@ -158,6 +188,8 @@ function TypeaheadInner<T>(
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     changeValue(event.target.value);
+    // The text is no longer the picked item, so the form must not send its key.
+    setPicked(null);
     setIsOpen(true);
     setActiveIndex(NO_ACTIVE_OPTION);
   }
@@ -180,7 +212,9 @@ function TypeaheadInner<T>(
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     // In Hindi, Japanese or Chinese keyboards, the user presses Enter to
     // confirm a word inside the keyboard itself. That Enter is not for us.
-    if (event.nativeEvent.isComposing) {
+    // Safari sends that Enter with `isComposing` already false, but with the
+    // old key code 229, so we check both.
+    if (event.nativeEvent.isComposing || event.keyCode === 229) {
       return;
     }
 
@@ -222,9 +256,23 @@ function TypeaheadInner<T>(
     }
   }
 
-  function handleBlur() {
+  // This runs when focus leaves the input or the "Try again" button.
+  function handleBlur(event: FocusEvent<HTMLDivElement>) {
+    // Tab moves focus from the input to "Try again", which is inside this
+    // component. If we closed the popup now, the button would vanish.
+    if (event.currentTarget.contains(event.relatedTarget)) {
+      return;
+    }
+
     setIsOpen(false);
     setActiveIndex(NO_ACTIVE_OPTION);
+  }
+
+  function handleRetry() {
+    retry();
+    // The search removes the button. Focus goes back to the input first, so
+    // a keyboard user does not lose their place on the page.
+    inputRef.current?.focus();
   }
 
   // A mouse press moves focus away from the input, and blur closes the list
@@ -241,34 +289,29 @@ function TypeaheadInner<T>(
   }
 
   function getStatusMessage(): string {
-    if (!isPopupVisible) {
+    if (!isPopupVisible || status !== "success") {
       return "";
     }
-    if (status === "loading") {
-      return text.searching;
-    }
-    if (status === "success") {
-      return items.length === 0 ? text.noResults(typedQuery) : text.resultsAvailable(items.length);
-    }
-    return "";
+    return items.length === 0 ? text.noResults(typedQuery) : text.resultsAvailable(items.length);
   }
 
   return (
-    <div className={className ? `typeahead ${className}` : "typeahead"}>
+    <div className={className ? `typeahead ${className}` : "typeahead"} onBlur={handleBlur}>
       <label className="typeahead__label" htmlFor={inputId}>
         {label}
       </label>
 
       <input
-        ref={ref}
+        ref={inputRef}
         id={inputId}
-        name={name}
         disabled={disabled}
         required={required}
         className="typeahead__input"
         type="text"
         role="combobox"
         autoComplete="off"
+        autoCapitalize="off"
+        enterKeyHint="search"
         spellCheck={false}
         placeholder={placeholder}
         value={inputValue}
@@ -281,10 +324,18 @@ function TypeaheadInner<T>(
         aria-busy={status === "loading"}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        onBlur={handleBlur}
       />
 
-      {/* Screen readers read this text when it changes. It is hidden on screen. */}
+      {/* The visible input holds a label for people. The form needs the key. */}
+      {name !== undefined && (
+        <input type="hidden" name={name} value={pickedKey} disabled={disabled} />
+      )}
+
+      {/*
+        Screen readers read this text when it changes. It is hidden on screen.
+        It holds only the final outcome of a search. "Searching" on every key
+        press would talk over the user. The error is read from its own alert.
+      */}
       <div className="visually-hidden" role="status" aria-live="polite">
         {getStatusMessage()}
       </div>
@@ -308,7 +359,9 @@ function TypeaheadInner<T>(
                   role="option"
                   aria-selected={isActive}
                   aria-disabled={isStale}
-                  onMouseEnter={() => setActiveIndex(index)}
+                  // Not onMouseEnter: that also fires when the list is drawn
+                  // again under a mouse that is not moving.
+                  onMouseMove={isActive ? undefined : () => setActiveIndex(index)}
                   onClick={isStale ? undefined : () => selectItem(item, index)}
                 >
                   {renderItem
@@ -319,7 +372,7 @@ function TypeaheadInner<T>(
             })}
         </ul>
 
-        {status === "loading" && items.length === 0 && (
+        {status === "loading" && items.length === 0 && isSearchingSlow && (
           <p className="typeahead__message">{text.searching}</p>
         )}
 
@@ -330,7 +383,7 @@ function TypeaheadInner<T>(
         {status === "error" && (
           <p className="typeahead__message" role="alert">
             {getErrorMessage()}{" "}
-            <button type="button" className="typeahead__retry" onClick={retry}>
+            <button type="button" className="typeahead__retry" onClick={handleRetry}>
               {text.retry}
             </button>
           </p>

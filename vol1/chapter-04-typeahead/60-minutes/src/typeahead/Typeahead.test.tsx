@@ -142,6 +142,36 @@ describe("Typeahead: searching", () => {
     expect(input).toHaveAttribute("aria-busy", "true");
   });
 
+  it("does not read “Searching” to screen readers on every key press", async () => {
+    const pending = createDeferred<string[]>();
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(["Mumbai", "Munnar"])
+      .mockReturnValue(pending.promise);
+    const { type } = renderTypeahead(search);
+
+    // First search in flight: nothing has settled, so nothing is read.
+    type("mu");
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    await wait(DEBOUNCE_MS);
+    expect(screen.getByRole("status")).toHaveTextContent("2 results available");
+
+    // Second search in flight, with the old rows still on screen.
+    await typeAndWait(type, "mum");
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+
+    pending.resolve(["Mumbai"]);
+    await wait(0);
+    expect(screen.getByRole("status")).toHaveTextContent("1 result available");
+  });
+
+  it("tells a phone keyboard to show a search key and not to start with a capital letter", () => {
+    const { input } = renderTypeahead(vi.fn().mockResolvedValue([]));
+
+    expect(input).toHaveAttribute("enterkeyhint", "search");
+    expect(input).toHaveAttribute("autocapitalize", "off");
+  });
+
   it("shows a message when the server returns nothing", async () => {
     const search = vi.fn().mockResolvedValue([]);
     const { input, type } = renderTypeahead(search);
@@ -463,6 +493,16 @@ describe("Typeahead: keyboard", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it("ignores the Enter that Safari sends with key code 229 at the end of an IME word", async () => {
+    const { input, press, onSelect } = await openWithThreeCities();
+
+    press("ArrowDown");
+    fireEvent.keyDown(input, { key: "Enter", isComposing: false, keyCode: 229 });
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(input).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("closes the list on the first Escape and clears the text on the second", async () => {
     const { input, press } = await openWithThreeCities();
 
@@ -546,14 +586,29 @@ describe("Typeahead: mouse and focus", () => {
     expect(mouseDown.defaultPrevented).toBe(true);
   });
 
-  it("makes the option under the mouse active", async () => {
+  it("makes the option active when the mouse moves over it", async () => {
     const search = vi.fn().mockResolvedValue(["Mumbai", "Munnar"]);
     const { type } = renderTypeahead(search);
     await typeAndWait(type, "mu");
 
-    fireEvent.mouseEnter(screen.getByRole("option", { name: "Munnar" }));
+    fireEvent.mouseMove(screen.getByRole("option", { name: "Munnar" }));
 
     expect(screen.getByRole("option", { name: "Munnar" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps the keyboard choice when the list is drawn under a mouse that is not moving", async () => {
+    const search = vi.fn().mockResolvedValue(["Mumbai", "Munnar"]);
+    const { type, press } = renderTypeahead(search);
+    await typeAndWait(type, "mu");
+    press("ArrowDown");
+
+    // The browser sends "mouse enter" to a new row under a still mouse, but no "mouse move".
+    const rowUnderMouse = screen.getByRole("option", { name: "Munnar" });
+    fireEvent.mouseEnter(rowUnderMouse);
+    fireEvent.mouseOver(rowUnderMouse);
+
+    expect(screen.getByRole("option", { name: "Mumbai" })).toHaveAttribute("aria-selected", "true");
+    expect(rowUnderMouse).toHaveAttribute("aria-selected", "false");
   });
 
   it("closes the list when the input loses focus", async () => {
@@ -565,6 +620,63 @@ describe("Typeahead: mouse and focus", () => {
 
     expect(input).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+});
+
+describe("Typeahead: “Try again” with the keyboard", () => {
+  /** Focuses the input and types a text that the server fails to answer. */
+  async function showErrorWithFocusInInput() {
+    const search = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Server is down"))
+      .mockResolvedValueOnce(["Mumbai"]);
+    const utils = renderTypeahead(search);
+
+    utils.input.focus();
+    await typeAndWait(utils.type, "mum");
+
+    return { ...utils, search, retryButton: screen.getByRole("button", { name: "Try again" }) };
+  }
+
+  it("keeps the error open when focus moves from the input to “Try again”", async () => {
+    const { retryButton } = await showErrorWithFocusInInput();
+
+    // This is what Tab does: the input loses focus, and the button gets it.
+    act(() => retryButton.focus());
+
+    expect(retryButton).toBeVisible();
+    expect(retryButton).toHaveFocus();
+    expect(screen.getByRole("alert")).toBeVisible();
+  });
+
+  it("keeps the error open when the blur event names “Try again” as the next element", async () => {
+    const { input, retryButton } = await showErrorWithFocusInInput();
+
+    fireEvent.blur(input, { relatedTarget: retryButton });
+
+    expect(retryButton).toBeVisible();
+  });
+
+  it("searches again on “Try again” and puts focus back in the input", async () => {
+    const { input, search, retryButton } = await showErrorWithFocusInInput();
+    act(() => retryButton.focus());
+
+    // Enter on a focused button is a click.
+    fireEvent.click(retryButton);
+    await wait(DEBOUNCE_MS);
+
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(input).toHaveFocus();
+    expect(getOptionTexts()).toEqual(["Mumbai"]);
+  });
+
+  it("closes the error when focus leaves “Try again” for another part of the page", async () => {
+    const { retryButton } = await showErrorWithFocusInInput();
+    act(() => retryButton.focus());
+
+    act(() => retryButton.blur());
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 
@@ -804,7 +916,8 @@ describe("Typeahead: translated messages", () => {
     await typeAndWait(type, "mu");
 
     expect(screen.getByText("खोज रहे हैं…", { selector: "p" })).toBeVisible();
-    expect(screen.getByRole("status")).toHaveTextContent("खोज रहे हैं…");
+    // Only people who can see the page get it. Screen readers hear the outcome.
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("shows the translated message for no results, with the query inside", async () => {

@@ -56,6 +56,38 @@ const CITIES: City[] = [
   { id: "vtz", name: "Visakhapatnam", state: "Andhra Pradesh" },
 ];
 
+/*
+ * A real search function, for a real server. The typeahead cannot see the
+ * HTTP status code, so this function turns each kind of answer into what
+ * the typeahead understands (the three rules are in `typeahead/types.ts`):
+ *
+ *   const searchCities: SearchFn<City> = async (query, signal) => {
+ *     const response = await fetch(`/api/cities?q=${encodeURIComponent(query)}`, { signal });
+ *
+ *     // Rule a: "too many requests" becomes RetryLaterError.
+ *     if (response.status === 429) {
+ *       // The header holds seconds. A missing or unreadable header means 1 second.
+ *       // If the API is on another origin, the browser hides this header
+ *       // from JavaScript. The server must send
+ *       // `Access-Control-Expose-Headers: Retry-After` to let us read it.
+ *       const seconds = Number(response.headers.get("Retry-After"));
+ *       throw new RetryLaterError(seconds > 0 ? seconds * 1000 : 1000);
+ *     }
+ *
+ *     // Rule b: every other failure becomes a normal error. Never return []
+ *     // here, or the user reads "No results" and the cache keeps that answer.
+ *     if (!response.ok) {
+ *       throw new Error(`The server answered ${response.status}`);
+ *     }
+ *
+ *     // Rule c: the array from the server. It is empty only when nothing matched.
+ *     return (await response.json()) as City[];
+ *   };
+ *
+ * `fetch` itself rejects when the network is down or the request is aborted.
+ * That is already rule b, so there is nothing more to write for it.
+ */
+
 const MIN_DELAY_MS = 150;
 const MAX_DELAY_MS = 700;
 /** Longer than the 5 second timeout of the typeahead. */

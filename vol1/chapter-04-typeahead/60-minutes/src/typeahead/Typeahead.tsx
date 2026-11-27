@@ -16,9 +16,10 @@
  * component never draws more than that many rows. Moving the active row
  * with the keyboard re-draws those few rows only.
  */
-import { forwardRef, useId, useState } from "react";
+import { forwardRef, useId, useImperativeHandle, useRef, useState } from "react";
 import type {
   ChangeEvent,
+  FocusEvent,
   ForwardedRef,
   KeyboardEvent,
   MouseEvent,
@@ -104,6 +105,10 @@ function TypeaheadInner<T>(
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(NO_ACTIVE_OPTION);
 
+  // We need the input ourselves, and the parent may ask for it through `ref`.
+  const inputRef = useRef<HTMLInputElement>(null);
+  useImperativeHandle(ref, () => inputRef.current as HTMLInputElement, []);
+
   // We search only while the list is open. After the user picks an item,
   // the input holds the full label, and we do not want one more request
   // for that label.
@@ -168,7 +173,9 @@ function TypeaheadInner<T>(
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     // In Hindi, Japanese or Chinese keyboards, the user presses Enter to
     // confirm a word inside the keyboard itself. That Enter is not for us.
-    if (event.nativeEvent.isComposing) {
+    // Safari sends that Enter with `isComposing` already false, but with the
+    // old key code 229, so we check both.
+    if (event.nativeEvent.isComposing || event.keyCode === 229) {
       return;
     }
 
@@ -210,9 +217,23 @@ function TypeaheadInner<T>(
     }
   }
 
-  function handleBlur() {
+  // This runs when focus leaves the input or the "Try again" button.
+  function handleBlur(event: FocusEvent<HTMLDivElement>) {
+    // Tab moves focus from the input to "Try again", which is inside this
+    // component. If we closed the popup now, the button would vanish.
+    if (event.currentTarget.contains(event.relatedTarget)) {
+      return;
+    }
+
     setIsOpen(false);
     setActiveIndex(NO_ACTIVE_OPTION);
+  }
+
+  function handleRetry() {
+    retry();
+    // The search removes the button. Focus goes back to the input first, so
+    // a keyboard user does not lose their place on the page.
+    inputRef.current?.focus();
   }
 
   // A mouse press moves focus away from the input, and blur closes the list
@@ -222,26 +243,20 @@ function TypeaheadInner<T>(
   }
 
   function getStatusMessage(): string {
-    if (!isPopupVisible) {
+    if (!isPopupVisible || status !== "success") {
       return "";
     }
-    if (status === "loading") {
-      return text.searching;
-    }
-    if (status === "success") {
-      return items.length === 0 ? text.noResults(typedQuery) : text.resultsAvailable(items.length);
-    }
-    return "";
+    return items.length === 0 ? text.noResults(typedQuery) : text.resultsAvailable(items.length);
   }
 
   return (
-    <div className={className ? `typeahead ${className}` : "typeahead"}>
+    <div className={className ? `typeahead ${className}` : "typeahead"} onBlur={handleBlur}>
       <label className="typeahead__label" htmlFor={inputId}>
         {label}
       </label>
 
       <input
-        ref={ref}
+        ref={inputRef}
         id={inputId}
         name={name}
         disabled={disabled}
@@ -250,6 +265,8 @@ function TypeaheadInner<T>(
         type="text"
         role="combobox"
         autoComplete="off"
+        autoCapitalize="off"
+        enterKeyHint="search"
         spellCheck={false}
         placeholder={placeholder}
         value={inputValue}
@@ -262,10 +279,13 @@ function TypeaheadInner<T>(
         aria-busy={status === "loading"}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        onBlur={handleBlur}
       />
 
-      {/* Screen readers read this text when it changes. It is hidden on screen. */}
+      {/*
+        Screen readers read this text when it changes. It is hidden on screen.
+        It holds only the final outcome of a search. "Searching" on every key
+        press would talk over the user. The error is read from its own alert.
+      */}
       <div className="visually-hidden" role="status" aria-live="polite">
         {getStatusMessage()}
       </div>
@@ -289,7 +309,9 @@ function TypeaheadInner<T>(
                   role="option"
                   aria-selected={isActive}
                   aria-disabled={isStale}
-                  onMouseEnter={() => setActiveIndex(index)}
+                  // Not onMouseEnter: that also fires when the list is drawn
+                  // again under a mouse that is not moving.
+                  onMouseMove={isActive ? undefined : () => setActiveIndex(index)}
                   onClick={isStale ? undefined : () => selectItem(item)}
                 >
                   {renderItem
@@ -311,7 +333,7 @@ function TypeaheadInner<T>(
         {status === "error" && (
           <p className="typeahead__message" role="alert">
             {text.error}{" "}
-            <button type="button" className="typeahead__retry" onClick={retry}>
+            <button type="button" className="typeahead__retry" onClick={handleRetry}>
               {text.retry}
             </button>
           </p>

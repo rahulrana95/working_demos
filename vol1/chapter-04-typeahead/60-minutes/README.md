@@ -29,7 +29,9 @@ Then open the address that the last command prints, usually `http://localhost:51
 
 ## What is part of the interview
 
-Every file says on its first lines whether you would write it in the interview.
+Every source file says on its first lines whether you would write it in the
+interview. `index.html` and `vite.config.ts` say so too. The JSON files do not,
+because JSON cannot hold a comment: none of them is part of the interview.
 
 | File                            | In the interview?                   | Time       | Lines of code                |
 | ------------------------------- | ----------------------------------- | ---------- | ---------------------------- |
@@ -37,13 +39,21 @@ Every file says on its first lines whether you would write it in the interview.
 | `src/typeahead/messages.ts`     | Yes                                 | 2 minutes  | 14                           |
 | `src/typeahead/useTypeahead.ts` | Yes                                 | 16 minutes | 79                           |
 | `src/typeahead/lruCache.ts`     | Yes                                 | 6 minutes  | 35                           |
-| `src/typeahead/Typeahead.tsx`   | Yes                                 | 28 minutes | 244                          |
-| `src/styles.css`                | Only the idea of logical properties | 2 minutes  | 172, most of it demo styling |
+| `src/typeahead/Typeahead.tsx`   | Yes                                 | 28 minutes | 248                          |
+| `src/styles.css`                | Only the idea of logical properties | 2 minutes  | 180, most of it demo styling |
 | `*.test.ts`, `*.test.tsx`       | No                                  |            |                              |
 | `src/App.tsx`, `src/api/`       | No                                  |            |                              |
 
-Lines of code are counted without blank lines and comments: 378 in the five
-TypeScript files, which is 78 more than the 45-minute answer.
+Lines of code are counted without blank lines and comments: 382 in the five
+TypeScript files, which is 79 more than the 45-minute answer. The folder has
+90 tests.
+
+The component code is 2,154 bytes when it is minified and compressed with gzip,
+without React. Measure it again with:
+
+```bash
+npx esbuild src/typeahead/index.ts --bundle --minify --format=esm --external:react --external:react/jsx-runtime | gzip -9 -c | wc -c
+```
 
 That is about 55 minutes of typing for someone who has practised it. The other
 5 minutes go to walking the interviewer through one race condition.
@@ -78,13 +88,17 @@ That is about 55 minutes of typing for someone who has practised it. The other
 - Upper case and lower case are the same query.
 - A failed request shows an error with "Try again", and is not cached.
 - No results shows a clear message.
-- Enter while typing in a Hindi, Japanese or Chinese keyboard does not select.
+- Enter while typing in a Hindi, Japanese or Chinese keyboard does not select. This also holds in Safari, which sends that Enter in a different way.
 - Enter with no active row does not select, so a form around the input can submit.
 - The list becomes shorter while a row is active: the active row is dropped.
 - ArrowDown and ArrowUp do nothing when the list is empty or shows an error.
 - Clicking a row works even though the click takes focus away from the input.
 - The component is removed while a request is in flight: the request is aborted.
 - A new search is loading: the old rows stay on screen, dimmed, and cannot be picked with Enter or a click.
+- Tab moves focus from the input to "Try again": the error stays open, and Enter on the button searches again. Focus then goes back to the input.
+- Focus leaves the component: the list closes.
+- The list is drawn again under a mouse that is not moving: the row picked with the keyboard stays active.
+- High-contrast mode (forced colours): the active row is still marked, with a bar in the system highlight colour.
 - The parent controls the text and ignores a change: the text does not change.
 - The parent clears the text from outside: the list closes.
 - Reading a cached answer does not make it live longer.
@@ -97,14 +111,19 @@ That is about 55 minutes of typing for someone who has practised it. The other
 The input follows the WAI-ARIA combobox pattern: `role="combobox"`,
 `aria-expanded`, `aria-controls` and `aria-activedescendant` on the input,
 `role="listbox"` and `role="option"` on the list. Focus stays in the input the
-whole time. A hidden status line tells screen reader users how many results
-are available.
+while the user moves through the rows; Tab can move it to "Try again". A hidden
+status line tells screen reader users the outcome of a search: how many results
+are available, or that there are none. It stays silent while a search is
+loading, so it does not talk on every key press. The error is read out from its
+own alert. On a phone, the keyboard shows a "search" key and does not start
+with a capital letter.
 
 ## Try it in the demo
 
 1. Type `mum` quickly. The panel shows one request, not three.
 2. Delete the last `m`, then type it again. No new request, because of the cache.
 3. Tick "Make the server fail" and type `pun`. You get an error. Untick it and press "Try again".
+   You can also reach "Try again" with the keyboard: press Tab, then Enter.
 4. Use ArrowDown, ArrowUp, Enter and Escape without touching the mouse.
 5. Tick "Right to left". The page is mirrored, and the bar of the active row moves to the right side.
 6. Tick "Messages in Hindi", then type `zzz`. The "no results" message is in Hindi.

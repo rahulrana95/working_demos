@@ -1,3 +1,4 @@
+/* NOT PART OF THE INTERVIEW: production version. Settings for the build tool and the tests. */
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
