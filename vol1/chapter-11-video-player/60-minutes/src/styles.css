@@ -1,0 +1,377 @@
+/*
+ * NOT PART OF THE INTERVIEW. Styles for the demo page and the player.
+ * Sizes and sides use logical properties (inline, block), so the layout
+ * mirrors itself in a right-to-left language.
+ */
+:root {
+  --color-text: #1c1f23;
+  --color-muted: #5b6470;
+  --color-border: #c5ccd6;
+  --color-accent: #1a56db;
+  --color-surface: #ffffff;
+  --color-page: #f5f6f8;
+  --color-danger: #b42318;
+  --radius: 8px;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-inline-size: 720px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.page h1 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+}
+
+.page__intro {
+  margin: 0 0 24px;
+  color: var(--color-muted);
+}
+
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+}
+
+/* ---------- Player ---------- */
+
+.player {
+  /* A host app can set these to theme the player. */
+  --player-accent: #6ea8ff;
+  --player-text: #ffffff;
+  --player-surface: #000000;
+
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--player-surface);
+  color: var(--player-text);
+  /* Space is kept before the video loads, so the page does not jump. */
+  aspect-ratio: 16 / 9;
+}
+
+/* A real outline, so the focus can be seen on a dark and on a light page. */
+.player:focus-visible,
+.player button:focus-visible,
+.player input:focus-visible {
+  outline: 3px solid var(--player-accent);
+  outline-offset: 2px;
+}
+
+.player:focus-visible {
+  outline-offset: -3px;
+}
+
+.player__video {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: contain;
+}
+
+/*
+ * The spinner. It is drawn for "loading" and "buffering", but it stays hidden
+ * for the first 300 ms. A wait shorter than that shows nothing, so a fast
+ * network never makes the spinner flash.
+ */
+.player[data-status="loading"]::after,
+.player[data-status="buffering"]::after {
+  content: "";
+  position: absolute;
+  inset-block-start: calc(50% - 44px);
+  inset-inline-start: calc(50% - 24px);
+  inline-size: 48px;
+  block-size: 48px;
+  border: 4px solid rgb(255 255 255 / 35%);
+  border-block-start-color: var(--player-text);
+  border-radius: 50%;
+  pointer-events: none;
+  animation:
+    player-spin 0.8s linear infinite,
+    player-appear 0s linear 300ms both;
+}
+
+@keyframes player-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes player-appear {
+  from {
+    visibility: hidden;
+  }
+  to {
+    visibility: visible;
+  }
+}
+
+.player__error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  /* Room for the bar of controls, which is drawn over the lower part. */
+  padding-block: 16px 112px;
+  padding-inline: 16px;
+  background: rgb(0 0 0 / 80%);
+  text-align: center;
+}
+
+.player__error p {
+  margin: 0;
+}
+
+/*
+ * The captions are inside the bar of controls, and are placed against its
+ * upper edge: "100%" is the height of the bar. So the captions are always
+ * just above the controls, also when the bar is two rows tall on a phone.
+ */
+.player__captions {
+  position: absolute;
+  inset-block-end: calc(100% + 8px);
+  inset-inline: 0;
+  inline-size: fit-content;
+  max-inline-size: 90%;
+  margin-block: 0;
+  margin-inline: auto;
+  padding-block: 2px;
+  padding-inline: 8px;
+  /*
+   * You cannot see this border on a normal screen. High-contrast mode removes
+   * the dark background and paints every border, so there the text gets a frame.
+   */
+  border: 1px solid transparent;
+  background: rgb(0 0 0 / 80%);
+  /* A caption can have two lines. The line break of the file is kept. */
+  white-space: pre-line;
+  text-align: center;
+  font-size: 1.25rem;
+  /* A click on the captions goes to the video below them. */
+  pointer-events: none;
+}
+
+/* The controls are always on screen in this version. They never hide. */
+.player__controls {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline: 0;
+  display: flex;
+  /* On a narrow phone the controls take two rows. */
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 8px;
+  background: rgb(0 0 0 / 70%);
+}
+
+.player button {
+  /* A finger needs a target about 44px tall. */
+  min-inline-size: 64px;
+  min-block-size: 44px;
+  padding-block: 0;
+  padding-inline: 12px;
+  border: 1px solid rgb(255 255 255 / 60%);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: max(16px, 1em);
+  cursor: pointer;
+}
+
+/* A pressed "Mute" is shown with a filled button and a thicker border, not by colour alone. */
+.player button[aria-pressed="true"] {
+  border-width: 3px;
+  background: rgb(255 255 255 / 25%);
+  text-decoration: line-through;
+}
+
+.player__time {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.player input[type="range"] {
+  inline-size: 72px;
+  block-size: 44px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  accent-color: var(--player-accent);
+}
+
+.player input[type="range"]:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* The seek bar takes the room that is left. We draw its track ourselves. */
+.player .player__seek {
+  flex: 1 1 120px;
+  min-inline-size: 0;
+  appearance: none;
+}
+
+.player__seek::-webkit-slider-runnable-track {
+  block-size: 8px;
+  border: 1px solid rgb(255 255 255 / 60%);
+  border-radius: 4px;
+  /* The played part is filled up to --played. The component sets that number. */
+  background: linear-gradient(
+    to right,
+    var(--player-accent) var(--played, 0%),
+    rgb(255 255 255 / 20%) var(--played, 0%)
+  );
+}
+
+.player__seek::-moz-range-track {
+  block-size: 8px;
+  border: 1px solid rgb(255 255 255 / 60%);
+  border-radius: 4px;
+  background: linear-gradient(
+    to right,
+    var(--player-accent) var(--played, 0%),
+    rgb(255 255 255 / 20%) var(--played, 0%)
+  );
+}
+
+/*
+ * In a right-to-left page the slider fills from the right, so the played
+ * part is drawn from the right too. These are two rules on purpose: a
+ * browser drops a whole rule when it does not know one of its selectors.
+ */
+[dir="rtl"] .player__seek::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to left,
+    var(--player-accent) var(--played, 0%),
+    rgb(255 255 255 / 20%) var(--played, 0%)
+  );
+}
+
+[dir="rtl"] .player__seek::-moz-range-track {
+  background: linear-gradient(
+    to left,
+    var(--player-accent) var(--played, 0%),
+    rgb(255 255 255 / 20%) var(--played, 0%)
+  );
+}
+
+.player__seek::-webkit-slider-thumb {
+  appearance: none;
+  inline-size: 18px;
+  block-size: 18px;
+  margin-block-start: -6px;
+  border: 2px solid var(--player-surface);
+  border-radius: 50%;
+  background: var(--player-text);
+}
+
+.player__seek::-moz-range-thumb {
+  inline-size: 18px;
+  block-size: 18px;
+  border: 2px solid var(--player-surface);
+  border-radius: 50%;
+  background: var(--player-text);
+}
+
+/*
+ * High-contrast mode removes background colours. The track and the thumb
+ * keep their real borders, in a system colour, so both can still be seen.
+ */
+@media (forced-colors: active) {
+  .player__seek::-webkit-slider-runnable-track {
+    border-color: ButtonText;
+  }
+
+  .player__seek::-webkit-slider-thumb {
+    border-color: ButtonText;
+    background: Highlight;
+  }
+
+  .player button[aria-pressed="true"] {
+    border-color: Highlight;
+  }
+}
+
+/* ---------- Demo panel ---------- */
+
+.panel {
+  margin-block-start: 24px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.panel p {
+  margin: 0 0 12px;
+}
+
+.panel__toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-block-end: 12px;
+}
+
+.panel__button {
+  min-block-size: 44px;
+  margin-block: 0 12px;
+  margin-inline: 0 8px;
+  padding-block: 0;
+  padding-inline: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  font: inherit;
+  cursor: pointer;
+}
+
+.panel__log {
+  margin: 0 0 12px;
+  padding-inline-start: 24px;
+  max-block-size: 160px;
+  overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875rem;
+}
+
+.panel__speed {
+  display: block;
+  inline-size: 100%;
+  margin-block-end: 12px;
+}
+
+.panel__hint {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
