@@ -1,0 +1,604 @@
+/* NOT PART OF THE INTERVIEW. Styles for the demo page and for the calendar. */
+:root {
+  --color-text: #1c1f23;
+  --color-muted: #5b6470;
+  --color-border: #c5ccd6;
+  --color-accent: #1a56db;
+  --color-accent-soft: #e6eefc;
+  --color-surface: #ffffff;
+  --color-page: #f5f6f8;
+  --color-danger: #b42318;
+  --radius: 8px;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.page h1 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+}
+
+.page__intro {
+  margin: 0 0 16px;
+  color: var(--color-muted);
+}
+
+.page__nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.page__nav label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page__nav select {
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  font-size: max(16px, 1em);
+}
+
+.page__nav button[aria-pressed="true"] {
+  border-color: var(--color-text);
+  border-width: 2px;
+  font-weight: 600;
+}
+
+.page__date {
+  margin: 0 0 16px;
+  font-size: 1.125rem;
+}
+
+.page__nav button,
+.panel button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.page__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+
+@media (min-width: 800px) {
+  .page__columns {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    align-items: start;
+  }
+}
+
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+}
+
+.panel {
+  position: sticky;
+  top: 16px;
+  padding: 16px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-size: 0.9375rem;
+}
+
+.panel button {
+  width: 100%;
+  margin-block-end: 8px;
+  text-align: start;
+}
+
+.panel p {
+  margin: 12px 0 0;
+}
+
+.panel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 8px;
+  cursor: pointer;
+}
+
+.panel__log {
+  margin: 8px 0 0;
+  padding-inline-start: 24px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+}
+
+.panel__events {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.panel__hint {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+/* ---------- Calendar ---------- */
+
+.calendar {
+  position: relative;
+  /* A week on a phone is wider than the screen. It scrolls sideways. */
+  overflow-x: auto;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.calendar__note {
+  margin: 0 0 8px;
+  color: var(--color-muted);
+}
+
+/* An error has a border, so it is not marked by colour alone. */
+.calendar [role="alert"],
+.calendar__waiting {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-danger);
+  border-inline-start-width: 4px;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-danger);
+}
+
+.calendar__waiting {
+  border-color: var(--color-text);
+  border-style: dashed;
+  color: var(--color-text);
+}
+
+.calendar__days,
+.calendar__month {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+/* Seven columns need room. */
+.calendar__days:has([role="columnheader"]:nth-child(7)),
+.calendar__month {
+  min-width: 760px;
+}
+
+/* The hours scroll inside the calendar, so the names of the days stay on screen. */
+.calendar__scroll {
+  position: relative;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* The lists of events are placed against this box, which is as tall as all the hours. */
+.calendar__canvas {
+  position: relative;
+}
+
+.calendar [role="row"] {
+  display: flex;
+}
+
+.calendar [role="columnheader"],
+.calendar [role="gridcell"] {
+  flex: 1 1 0;
+  min-width: 0;
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.calendar [role="columnheader"]:first-child,
+.calendar [role="gridcell"]:first-child {
+  border-inline-start-color: transparent;
+}
+
+.calendar [role="columnheader"] {
+  /* The same number as the top of .calendar__lists below. */
+  height: 32px;
+  padding: 4px 8px;
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Today is marked with a bar, not by colour alone. */
+.calendar [aria-current="date"] {
+  border-block-end: 3px solid var(--color-accent);
+}
+
+.calendar__scroll [role="row"]:first-child {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 3;
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+/* The all-day events have their own row above the hours. */
+.calendar__allday {
+  display: flex;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.calendar__allday ul {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  padding: 2px;
+  list-style: none;
+}
+
+/* The lists of events lie over the grid of slots, one list over each day. */
+.calendar__lists {
+  position: absolute;
+  inset-block: 32px 0;
+  inset-inline: 0;
+  z-index: 1;
+  display: flex;
+  /* Clicks between the events fall through to the slots. */
+  pointer-events: none;
+}
+
+/* The strip on the start side shows the hour of each slot. The strip on the
+   end side is always free, so a slot can be clicked even in a full hour. */
+.calendar__lists ol {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  margin-inline: 52px 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.calendar__lists li {
+  position: absolute;
+  padding: 1px;
+  pointer-events: auto;
+}
+
+.calendar__event,
+.calendar__more {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 22px;
+  padding: 1px 4px;
+  overflow: hidden;
+  border: 1px solid var(--color-accent);
+  border-inline-start-width: 4px;
+  border-radius: 4px;
+  background: var(--color-accent-soft);
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  text-align: start;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.calendar__lists .calendar__event,
+.calendar__lists .calendar__more {
+  height: 100%;
+}
+
+/* A finger that starts on an event drags the event. Without this rule the
+   browser would take the touch for scrolling and cancel the drag. */
+.calendar__lists .calendar__event {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The event that is being moved has a thick dashed edge, not only another colour. */
+.calendar__event.is-moving {
+  z-index: 2;
+  border-style: dashed;
+  border-width: 2px;
+  border-inline-start-width: 4px;
+  cursor: grabbing;
+}
+
+/* The box that stands for the events that did not fit is dashed, so it does not look like an event. */
+.calendar__more {
+  border-style: dashed;
+  border-inline-start-width: 1px;
+  background: var(--color-surface);
+  font-weight: 600;
+}
+
+/* In a week, that box is narrow and tall. Its text runs down it. */
+.calendar__lists .calendar__more {
+  padding: 4px 0;
+  writing-mode: vertical-rl;
+  text-overflow: clip;
+}
+
+/* The lower edge of an event is the handle that changes its end. */
+.calendar__resize {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+/* The line for the present time is a border, so high-contrast mode keeps it. */
+.calendar__lists li.calendar__now {
+  inset-inline: -52px -8px;
+  z-index: 2;
+  padding: 0;
+  border-block-start: 2px solid var(--color-danger);
+  pointer-events: none;
+}
+
+.calendar [role="gridcell"] > button:not([data-day]) {
+  display: block;
+  width: 100%;
+  /* One hour. The same number as HOUR_HEIGHT in layoutDay.ts. Taller than 44px, for a finger. */
+  height: 48px;
+  padding: 2px 4px;
+  border: 0;
+  border-block-start: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.6875rem;
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.calendar [role="gridcell"] > button:hover:enabled {
+  background: var(--color-page);
+}
+
+/* A day of 23 hours has no slot in the last row of a week. */
+.calendar [role="gridcell"] > button:disabled {
+  border-block-start-style: dashed;
+  cursor: default;
+}
+
+/* Focus is a real outline, drawn inside the box so the next box cannot hide it. */
+.calendar button:focus-visible,
+.calendar input:focus-visible,
+.calendar select:focus-visible {
+  outline: 3px solid var(--color-text);
+  outline-offset: -3px;
+}
+
+/* ---------- Calendar: the month ---------- */
+
+.calendar__month [role="row"] + [role="row"] {
+  border-block-start: 1px solid var(--color-border);
+}
+
+.calendar__month [role="gridcell"] {
+  min-height: 132px;
+  padding: 2px;
+}
+
+/* A day of another month is marked by a dashed edge and by lighter text. */
+.calendar__month .is-outside {
+  border-inline-start-style: dashed;
+  color: var(--color-muted);
+}
+
+.calendar__daynumber {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.calendar__month ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---------- Calendar: the form, and the rules for high contrast and paper ---------- */
+
+.calendar__form {
+  display: grid;
+  gap: 12px;
+  margin-block-end: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.calendar__form label {
+  display: grid;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.calendar__form .calendar__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-weight: 400;
+}
+
+.calendar__form fieldset {
+  margin: 0;
+  padding: 4px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.calendar__form input:not([type="checkbox"], [type="radio"]),
+.calendar__form select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  /* Safari on iPhone zooms the page when a focused input has text smaller than 16px. */
+  font-size: max(16px, 1em);
+}
+
+.calendar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.calendar__form button,
+.calendar [role="alert"] button,
+.calendar__waiting button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.calendar__form button[type="submit"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.calendar__form [role="alert"] {
+  margin: 0;
+}
+
+/* High-contrast mode keeps borders and drops backgrounds. An event box is
+   then still a box, because its edge is a real border. */
+@media (forced-colors: active) {
+  .calendar__event,
+  .calendar__more {
+    border-color: ButtonText;
+  }
+
+  .calendar__lists li.calendar__now,
+  .calendar [aria-current="date"] {
+    border-color: Highlight;
+  }
+
+  .calendar button:focus-visible,
+  .calendar input:focus-visible,
+  .calendar select:focus-visible {
+    outline-color: Highlight;
+  }
+}
+
+/* On paper there is no scrolling and nothing to click. The whole day is
+   printed, and the form and the messages about the connection are left out.
+   The calendar also draws every event box while printing (TimeGrid.tsx). */
+@media print {
+  .page__intro,
+  .page__nav,
+  .panel,
+  .calendar__form,
+  .calendar__note,
+  .calendar__waiting,
+  .calendar__resize {
+    display: none;
+  }
+
+  .calendar,
+  .calendar__days,
+  .calendar__month {
+    overflow: visible;
+  }
+
+  .calendar__scroll {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .calendar__scroll [role="row"]:first-child {
+    position: static;
+  }
+
+  /* An event is not cut in two by the end of a page. */
+  .calendar__lists li,
+  .calendar__month [role="gridcell"] {
+    break-inside: avoid;
+  }
+
+  /* Browsers leave backgrounds out on paper. The border still shows the box. */
+  .calendar__event {
+    border-color: #000000;
+    background: none;
+  }
+}
