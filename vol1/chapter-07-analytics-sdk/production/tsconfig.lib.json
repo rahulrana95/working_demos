@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist-lib/types",
+    "rootDir": "src/analytics",
+    "types": []
+  },
+  "include": ["src/analytics"],
+  "exclude": [
+    "src/analytics/**/*.test.ts",
+    "src/analytics/**/*.test.tsx",
+    "src/analytics/testHelpers.ts"
+  ]
+}
