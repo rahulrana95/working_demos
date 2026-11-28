@@ -1,0 +1,245 @@
+/*
+ * NOT PART OF THE INTERVIEW, except one idea that you say aloud: the box
+ * around an image gets its shape (`aspect-ratio`) before the image loads, so
+ * nothing below it moves. The rules are under "Feed". The rest is demo styling.
+ */
+:root {
+  --color-text: #1c1f23;
+  --color-muted: #5b6470;
+  --color-border: #c5ccd6;
+  --color-accent: #1a56db;
+  --color-accent-soft: #e6eefc;
+  --color-surface: #ffffff;
+  --color-page: #f5f6f8;
+  --color-danger: #b42318;
+  --radius: 8px;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-width: 560px;
+  margin: 0 auto;
+  /* Room for the panel, which is fixed to the bottom of the screen. */
+  padding: 24px 0 200px;
+}
+
+.page h1 {
+  margin: 0 16px 8px;
+  font-size: 1.5rem;
+}
+
+.page__intro {
+  margin: 0 16px 16px;
+  color: var(--color-muted);
+}
+
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+}
+
+/* ---------- Feed ---------- */
+
+.post {
+  padding: 12px 16px;
+  background: var(--color-surface);
+  /* A border, not a margin: the space between two posts is part of the post. */
+  border-bottom: 8px solid var(--color-page);
+}
+
+.post:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: -3px;
+}
+
+.post__author {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.post__text {
+  margin: 8px 0;
+  /* Keeps the line breaks that the author typed. A long word cannot widen the page. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The box has the shape of the image before the image loads: the component
+ * sets `aspect-ratio` from the width and height that the server sends.
+ */
+.post__media {
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--color-page);
+}
+
+.post__media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.post__footer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.post__like {
+  /* A finger needs a target about 44px tall and wide. */
+  min-width: 64px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/*
+ * A pressed button differs by more than colour: a thicker look from the
+ * accent border, and a tick before the word.
+ */
+.post__like[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.post__like[aria-pressed="true"]::before {
+  content: "✓ ";
+}
+
+.post__like:focus-visible,
+.feed__more:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.feed__message {
+  margin: 0;
+  padding: 16px;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.feed__message--error {
+  color: var(--color-danger);
+}
+
+/* The sentinel has no height. It only marks the end of the list. */
+.feed__sentinel {
+  height: 0;
+}
+
+.feed__more {
+  display: block;
+  min-height: 44px;
+  margin: 16px auto;
+  padding: 0 20px;
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.feed__more[aria-disabled="true"] {
+  border-style: dashed;
+  color: var(--color-muted);
+  cursor: default;
+}
+
+/* High-contrast mode drops background colours, so the pressed button keeps a mark of its own. */
+@media (forced-colors: active) {
+  .post__like[aria-pressed="true"] {
+    border-color: Highlight;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Demo panel ---------- */
+
+.panel {
+  position: fixed;
+  z-index: 10;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 8px 16px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 0.875rem;
+}
+
+.panel__toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+  margin-right: 16px;
+}
+
+.panel__numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin: 4px 0;
+}
+
+.panel__numbers dt {
+  color: var(--color-muted);
+}
+
+.panel__numbers dd {
+  margin: 0 12px 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel__hint {
+  margin: 0;
+  color: var(--color-muted);
+}
