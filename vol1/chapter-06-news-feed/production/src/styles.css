@@ -1,0 +1,420 @@
+/*
+ * NOT PART OF THE INTERVIEW: production version.
+ * The rules of the feed are under "Feed". The rest is demo styling.
+ * The production version adds the video button, the placeholder of a post
+ * that is fetched again, and the notice for likes that wait.
+ */
+:root {
+  --color-text: #1c1f23;
+  --color-muted: #5b6470;
+  --color-border: #c5ccd6;
+  --color-accent: #1a56db;
+  --color-accent-soft: #e6eefc;
+  --color-surface: #ffffff;
+  --color-page: #f5f6f8;
+  --color-danger: #b42318;
+  --radius: 8px;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-inline-size: 560px;
+  margin-block: 0;
+  margin-inline: auto;
+  /* Room for the panel, which is fixed to the bottom of the screen. */
+  padding-block: 24px 300px;
+}
+
+.page h1 {
+  margin-block: 0 8px;
+  margin-inline: 16px;
+  font-size: 1.5rem;
+}
+
+.page__intro {
+  margin-block: 0 16px;
+  margin-inline: 16px;
+  color: var(--color-muted);
+}
+
+kbd {
+  padding-block: 1px;
+  padding-inline: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+}
+
+/* ---------- Feed ---------- */
+
+/*
+ * We move the scroll position ourselves when a post above the screen
+ * changes its height. The browser must not do the same a second time.
+ */
+.feed__list {
+  overflow-anchor: none;
+}
+
+.post {
+  padding-block: 12px;
+  padding-inline: 16px;
+  background: var(--color-surface);
+  /*
+   * A border, not a margin: the space between two posts is part of the
+   * post, so the measured height of a post holds it.
+   */
+  border-block-end: 8px solid var(--color-page);
+}
+
+.post:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: -3px;
+}
+
+.post__header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.post__avatar {
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-page);
+}
+
+.post__author {
+  flex: 1;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.post__time {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.post__time a {
+  /* A finger needs a target about 44px tall. */
+  display: inline-block;
+  padding-block: 11px;
+  color: inherit;
+}
+
+.post__text {
+  margin-block: 8px;
+  margin-inline: 0;
+  /* Keeps the line breaks that the author typed. A long word cannot widen the page. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The box has the shape of the image before the image loads: the component
+ * sets `aspect-ratio` from the width and height that the server sends.
+ */
+.post__media {
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--color-page);
+}
+
+.post__media {
+  /* The play button of a video sits in a corner of the box. */
+  position: relative;
+}
+
+.post__media img,
+.post__media video {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.post__play {
+  position: absolute;
+  inset-block-end: 8px;
+  inset-inline-start: 8px;
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  padding-block: 0;
+  padding-inline: 12px;
+  border: 2px solid var(--color-surface);
+  border-radius: var(--radius);
+  background: var(--color-text);
+  color: var(--color-surface);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* A post whose data is fetched again keeps its height, with nothing in it. */
+.post--placeholder {
+  overflow: hidden;
+}
+
+.post__retry {
+  min-block-size: 44px;
+  padding-block: 0;
+  padding-inline: 8px;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Likes that are not saved yet: the user must be able to read this while scrolling. */
+.feed__notice {
+  position: sticky;
+  z-index: var(--feed-z-index, 5);
+  inset-block-start: var(--feed-sticky-top, 8px);
+  margin-block: 0 8px;
+  margin-inline: 16px;
+  padding-block: 8px;
+  padding-inline: 12px;
+  border: 2px solid var(--color-text);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.post__footer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-block-start: 8px;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.post__like {
+  /* A finger needs a target about 44px tall and wide. */
+  min-inline-size: 64px;
+  min-block-size: 44px;
+  padding-block: 0;
+  padding-inline: 12px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/*
+ * A pressed button differs by more than colour: a thicker look from the
+ * accent border, and a tick before the word.
+ */
+.post__like[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.post__like[aria-pressed="true"]::before {
+  content: "✓ ";
+}
+
+.post__like:focus-visible,
+.post__play:focus-visible,
+.post__retry:focus-visible,
+.feed__more:focus-visible,
+.feed__new:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.post__error {
+  margin-block: 8px 0;
+  margin-inline: 0;
+  color: var(--color-danger);
+}
+
+.feed__skeleton-post {
+  block-size: 180px;
+  background: var(--color-surface);
+  border-block-end: 8px solid var(--color-page);
+}
+
+.feed__message {
+  margin: 0;
+  padding: 16px;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.feed__message--error {
+  color: var(--color-danger);
+}
+
+/* The sentinel has no height. It only marks the end of the list. */
+.feed__sentinel {
+  block-size: 0;
+}
+
+.feed__more {
+  display: block;
+  min-block-size: 44px;
+  margin-block: 16px;
+  margin-inline: auto;
+  padding-block: 0;
+  padding-inline: 20px;
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.feed__more[aria-disabled="true"] {
+  border-style: dashed;
+  color: var(--color-muted);
+  cursor: default;
+}
+
+/*
+ * The pill stays at the top of the screen while the user reads, so new
+ * posts are one tap away. A host app can set its place and its layer.
+ */
+.feed__new {
+  position: sticky;
+  z-index: var(--feed-z-index, 5);
+  inset-block-start: var(--feed-sticky-top, 8px);
+  display: block;
+  min-block-size: 44px;
+  margin-block: 0 8px;
+  margin-inline: auto;
+  padding-block: 0;
+  padding-inline: 20px;
+  border: 2px solid var(--color-accent);
+  border-radius: 22px;
+  background: var(--color-accent);
+  color: var(--color-surface);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* High-contrast mode drops background colours, so the pressed button keeps a mark of its own. */
+@media (forced-colors: active) {
+  .post__like[aria-pressed="true"] {
+    border-color: Highlight;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Demo panel ---------- */
+
+.panel {
+  position: fixed;
+  z-index: 10;
+  inset-block-end: 0;
+  inset-inline: 0;
+  padding-block: 8px;
+  padding-inline: 16px;
+  border-block-start: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 0.875rem;
+}
+
+.panel__toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-block-size: 32px;
+  margin-inline-end: 16px;
+}
+
+.panel__numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-block: 4px;
+  margin-inline: 0;
+}
+
+.panel__numbers dt {
+  color: var(--color-muted);
+}
+
+.panel__numbers dd {
+  margin-block: 0;
+  margin-inline: 0 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel__hint {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+/* ---------- The page of one post, in the demo ---------- */
+
+.detail {
+  padding-inline: 16px;
+}
+
+.detail__back {
+  display: inline-block;
+  padding-block: 11px;
+}
+
+.detail__post {
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+/* ---------- Last events in the demo ---------- */
+
+.panel__log {
+  margin: 0;
+  padding-inline-start: 24px;
+  max-block-size: 72px;
+  overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+}
+
+.panel__button {
+  min-block-size: 32px;
+  margin-inline-end: 8px;
+  font: inherit;
+}
