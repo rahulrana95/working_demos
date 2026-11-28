@@ -172,8 +172,8 @@ kbd {
   font-weight: 400;
 }
 
-.field--checkbox .field__help,
-.field--checkbox .field__error {
+/* The help text and the error text of a tick box sit under its label. */
+.field--checkbox > div {
   grid-column: 2;
 }
 

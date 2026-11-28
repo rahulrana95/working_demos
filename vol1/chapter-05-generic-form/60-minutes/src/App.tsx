@@ -5,7 +5,6 @@
  */
 import { useEffect, useRef, useState } from "react";
 import {
-  checkEmailIsFree,
   createStressSchema,
   createSubmit,
   onboardingSchema,
@@ -13,16 +12,8 @@ import {
   TAKEN_EMAIL,
 } from "./api/onboarding";
 import { HINDI_MESSAGES } from "./demo/hindiMessages";
-import { RadioControl } from "./demo/RadioControl";
-import { Form } from "./form";
-import type { FieldTypeDefinition, FormValues } from "./form";
-
-// These objects are made once, outside the component. The form asks for the
-// same object on every render, so that it can skip the fields.
-const FIELD_TYPES: Record<string, FieldTypeDefinition> = {
-  radio: { component: RadioControl, isGroup: true },
-};
-const ASYNC_VALIDATORS = { emailIsFree: checkEmailIsFree };
+import { Form, showRenderCounts } from "./form";
+import type { FormValues } from "./form";
 
 /**
  * Open the page with `?fields=300` to start with the form of 300 fields. The
@@ -38,7 +29,12 @@ export function App() {
   const [isServerFailing, setIsServerFailing] = useState(false);
   const [isHindi, setIsHindi] = useState(false);
   const [isStressTest, setIsStressTest] = useState(startsWithStressTest);
-  const [showRenderCounts, setShowRenderCounts] = useState(false);
+  const [areCountsShown, setAreCountsShown] = useState(false);
+
+  // The counters are a debug switch outside React, so an effect turns them on and off.
+  useEffect(() => {
+    showRenderCounts(areCountsShown);
+  }, [areCountsShown]);
 
   // The submit function is created once. It reads the tick box from a ref,
   // so it always sees the value of the moment the server "answers".
@@ -72,10 +68,9 @@ export function App() {
         key={schema.id}
         schema={schema}
         onSubmit={handleSubmit}
-        asyncValidators={ASYNC_VALIDATORS}
-        fieldTypes={FIELD_TYPES}
+        // `HINDI_MESSAGES` is made once, outside the component. The form asks for
+        // the same object on every render, so that it can skip the fields.
         messages={isHindi ? HINDI_MESSAGES : undefined}
-        showRenderCounts={showRenderCounts}
       />
 
       <section className="panel" aria-label="What is happening">
@@ -106,8 +101,8 @@ export function App() {
         <label className="panel__toggle">
           <input
             type="checkbox"
-            checked={showRenderCounts}
-            onChange={(event) => setShowRenderCounts(event.target.checked)}
+            checked={areCountsShown}
+            onChange={(event) => setAreCountsShown(event.target.checked)}
           />
           Show how many times each field was drawn
         </label>
@@ -129,9 +124,9 @@ export function App() {
         </details>
 
         <p className="panel__hint">
-          Type <kbd>{TAKEN_EMAIL}</kbd> as the email and wait: the server says it is taken. Send the
-          company name <kbd>{REFUSED_COMPANY}</kbd>: the server puts an error on that field. Tick
-          “300 fields” and “Show how many times”, then type: only one number goes up.
+          Send the form with the email <kbd>{TAKEN_EMAIL}</kbd> or the company name{" "}
+          <kbd>{REFUSED_COMPANY}</kbd>: the server puts an error on that field, and focus goes
+          there. Tick “300 fields” and “Show how many times”, then type: only one number goes up.
         </p>
       </section>
     </main>

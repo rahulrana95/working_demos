@@ -8,10 +8,8 @@ const seenMessages = new Set<string>();
 
 /** Writes the message to the console the first time only. */
 export function warnOnce(message: string): void {
-  if (seenMessages.has(message)) {
-    return;
+  if (!seenMessages.has(message)) {
+    seenMessages.add(message);
+    console.error(message);
   }
-
-  seenMessages.add(message);
-  console.error(message);
 }

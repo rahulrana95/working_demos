@@ -27,19 +27,14 @@ export function Form({ schema, onSubmit }: FormProps) {
   // A field we cannot draw cannot be filled in, so it must not be checked or sent.
   const knownFields = schema.fields.filter((field) => getControl(field.type) !== undefined);
   const form = useForm({ ...schema, fields: knownFields }, onSubmit);
-
+  // A field that is hidden now leaves the summary: the user cannot fix it.
   const summaryFields = knownFields.filter(
     (field) => form.summaryErrors[field.name] !== undefined && isVisible(field, form.values),
   );
 
   return (
-    <form
-      className="form"
-      // The browser has its own error bubbles. They would fight with our messages.
-      noValidate
-      aria-label={schema.title}
-      onSubmit={form.handleSubmit}
-    >
+    // `noValidate` turns off the error bubbles of the browser. They would fight with our messages.
+    <form className="form" noValidate aria-label={schema.title} onSubmit={form.handleSubmit}>
       {schema.title !== undefined && <h2 className="form__title">{schema.title}</h2>}
 
       {/*
@@ -57,7 +52,7 @@ export function Form({ schema, onSubmit }: FormProps) {
             </ul>
           </>
         )}
-        {form.submitError && (
+        {form.status === "failed" && (
           <p className="form__alert-title">
             We could not send the form. Your answers are still here. Please try again.
           </p>
@@ -72,35 +67,21 @@ export function Form({ schema, onSubmit }: FormProps) {
         The button is never disabled. A disabled button cannot tell the user
         what is wrong. A second press while we send is ignored in the hook.
       */}
-      <button className="form__submit" type="submit" aria-busy={form.isSubmitting}>
-        {form.isSubmitting ? "Sending…" : (schema.submitLabel ?? "Submit")}
+      <button className="form__submit" type="submit" aria-busy={form.status === "submitting"}>
+        {form.status === "submitting" ? "Sending…" : (schema.submitLabel ?? "Submit")}
       </button>
     </form>
   );
 }
 
-interface FieldProps {
-  field: FieldSchema;
-  form: UseFormReturn;
-}
-
-function Field({ field, form }: FieldProps) {
+function Field({ field, form }: { field: FieldSchema; form: UseFormReturn }) {
   const Control = getControl(field.type);
-
-  if (!isVisible(field, form.values)) {
-    return null;
-  }
-  if (Control === undefined) {
-    return <UnsupportedField field={field} />;
-  }
+  if (!isVisible(field, form.values)) return null;
+  if (Control === undefined) return <UnsupportedField type={field.type} />;
 
   const id = form.getFieldId(field.name);
-  const helpId = `${id}-help`;
-  const errorId = `${id}-error`;
   const error = form.errors[field.name];
-
-  // A screen reader reads the help and the error after the label.
-  const describedBy = [field.helpText && helpId, error && errorId].filter(Boolean).join(" ");
+  const descriptionId = `${id}-description`;
 
   return (
     <div className={`field field--${field.type}${error ? " is-invalid" : ""}`}>
@@ -109,12 +90,11 @@ function Field({ field, form }: FieldProps) {
         {/* A screen reader already says "required", because of the attribute on the control. */}
         {field.required && <span aria-hidden="true"> (required)</span>}
       </label>
-
       <Control
         field={field}
         value={form.values[field.name] ?? ""}
         onChange={(value) => form.setValue(field.name, value)}
-        controlProps={{
+        shared={{
           id,
           name: field.name,
           required: field.required,
@@ -122,30 +102,24 @@ function Field({ field, form }: FieldProps) {
           "aria-required": field.required,
           autoComplete: field.autoComplete,
           "aria-invalid": error ? true : undefined,
-          "aria-describedby": describedBy || undefined,
+          // A screen reader reads the help and the error after the label.
+          "aria-describedby": field.helpText || error ? descriptionId : undefined,
           onBlur: () => form.handleBlur(field.name),
         }}
       />
-
-      {field.helpText && (
-        <p id={helpId} className="field__help">
-          {field.helpText}
-        </p>
-      )}
-      {error && (
-        <p id={errorId} className="field__error">
-          {error}
-        </p>
-      )}
+      <div id={descriptionId}>
+        {field.helpText && <p className="field__help">{field.helpText}</p>}
+        {error && <p className="field__error">{error}</p>}
+      </div>
     </div>
   );
 }
 
 /** Shown in place of a field whose type we do not know. The other fields still work. */
-function UnsupportedField({ field }: { field: FieldSchema }) {
+function UnsupportedField({ type }: { type: string }) {
   useEffect(() => {
-    warnOnce(`Form schema error: no component for the field type "${field.type}".`);
-  }, [field.type]);
+    warnOnce(`Form schema error: no component for the field type "${type}".`);
+  }, [type]);
 
-  return <p className="field field__unsupported">Unsupported field type: {field.type}</p>;
+  return <p className="field field__unsupported">Unsupported field type: {type}</p>;
 }

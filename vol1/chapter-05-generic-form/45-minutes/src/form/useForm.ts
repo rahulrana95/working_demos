@@ -16,30 +16,25 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { FieldValue, FormErrors, FormSchema, FormValues } from "./types";
-import {
-  getInitialValues,
-  getSubmitValues,
-  isVisible,
-  validateField,
-  validateForm,
-} from "./validation";
+import { getInitialValues, getSubmitValues, validateField, validateForm } from "./validation";
 
 export type SubmitHandler = (values: FormValues) => Promise<void> | void;
 
 export function useForm(schema: FormSchema, onSubmit: SubmitHandler) {
   const [values, setValues] = useState(() => getInitialValues(schema));
   const [errors, setErrors] = useState<FormErrors>({});
-  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  /** The errors found by the last submit. They do not change while the user types. */
   const [summaryErrors, setSummaryErrors] = useState<FormErrors>({});
   const [hasSubmitted, setHasSubmitted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState(false);
+  /** "failed" means that `onSubmit` failed. The values are kept, so the user can try again. */
+  const [status, setStatus] = useState<"idle" | "submitting" | "failed">("idle");
 
   const baseId = useId();
+  /** The id of the control of one field. Its label points at it. */
   const getFieldId = (name: string) => `${baseId}-${name}`;
 
   // State is one render late: two submits in the same moment would both read
-  // `isSubmitting` as false. A ref changes at once, so the second one stops.
+  // "idle". A ref changes at once, so the second one stops.
   const isSubmittingRef = useRef(false);
 
   // The form can be removed while `onSubmit` is still waiting for the server.
@@ -55,7 +50,6 @@ export function useForm(schema: FormSchema, onSubmit: SubmitHandler) {
   function checkField(name: string, value: FieldValue) {
     const field = schema.fields.find((candidate) => candidate.name === name);
     const error = field === undefined ? null : validateField(field, value);
-
     setErrors(({ [name]: _oldError, ...others }) =>
       error === null ? others : { ...others, [name]: error },
     );
@@ -64,34 +58,23 @@ export function useForm(schema: FormSchema, onSubmit: SubmitHandler) {
   function setValue(name: string, value: FieldValue) {
     // A hidden field keeps its value here, so the text is back when the field is shown again.
     setValues((current) => ({ ...current, [name]: value }));
-
-    if (errors[name] !== undefined || hasSubmitted) {
-      checkField(name, value);
-    }
+    if (errors[name] !== undefined || hasSubmitted) checkField(name, value);
   }
 
-  function handleBlur(name: string) {
-    setTouched((current) => ({ ...current, [name]: true }));
-    checkField(name, values[name] ?? "");
-  }
+  const handleBlur = (name: string) => checkField(name, values[name] ?? "");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     // Without this the browser loads the page again.
     event.preventDefault();
+    if (isSubmittingRef.current) return;
 
-    if (isSubmittingRef.current) {
-      return;
-    }
-
-    const visibleFields = schema.fields.filter((field) => isVisible(field, values));
     const foundErrors = validateForm(schema, values);
     setErrors(foundErrors);
     setSummaryErrors(foundErrors);
-    setTouched(Object.fromEntries(visibleFields.map((field) => [field.name, true])));
     setHasSubmitted(true);
-    setSubmitError(false);
+    setStatus("idle");
 
-    const firstInvalidField = visibleFields.find((field) => foundErrors[field.name] !== undefined);
+    const firstInvalidField = schema.fields.find((field) => foundErrors[field.name] !== undefined);
     if (firstInvalidField !== undefined) {
       // The field is already on screen, so we can move focus now.
       document.getElementById(getFieldId(firstInvalidField.name))?.focus();
@@ -99,39 +82,18 @@ export function useForm(schema: FormSchema, onSubmit: SubmitHandler) {
     }
 
     isSubmittingRef.current = true;
-    setIsSubmitting(true);
-
+    setStatus("submitting");
+    let hasFailed = false;
     try {
       await onSubmit(getSubmitValues(schema, values));
     } catch {
-      if (isMountedRef.current) {
-        setSubmitError(true);
-      }
-    } finally {
-      isSubmittingRef.current = false;
-      if (isMountedRef.current) {
-        setIsSubmitting(false);
-      }
+      hasFailed = true;
     }
+    isSubmittingRef.current = false;
+    if (isMountedRef.current) setStatus(hasFailed ? "failed" : "idle");
   }
 
-  return {
-    values,
-    /** One error text for each field that was checked and is wrong. */
-    errors,
-    /** The fields that the user has left, or that were on screen at a submit. */
-    touched,
-    /** The errors found by the last submit. They do not change while the user types. */
-    summaryErrors,
-    isSubmitting,
-    /** True when `onSubmit` failed. The values are kept, so the user can try again. */
-    submitError,
-    /** The id of the control of one field. Its label points at it. */
-    getFieldId,
-    setValue,
-    handleBlur,
-    handleSubmit,
-  };
+  return { values, errors, summaryErrors, status, getFieldId, setValue, handleBlur, handleSubmit };
 }
 
 export type UseFormReturn = ReturnType<typeof useForm>;

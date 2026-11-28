@@ -55,8 +55,6 @@ export interface FormState {
   itemIds: Record<string, number[]>;
   /** One error for each field that was checked and is wrong, from our rules or from a server. */
   errors: FormErrors;
-  /** The fields that the user has left, or that were on screen at a submit. */
-  touched: Record<string, boolean>;
   /** The fields with a server check that has not answered yet. */
   checking: Record<string, boolean>;
   /** The errors found by the last press on Next or Submit. They do not change while the user types. */
@@ -198,7 +196,6 @@ export function createFormStore(schema: FormSchema, getOptions: () => FormStoreO
       values,
       itemIds,
       errors: {},
-      touched: {},
       checking: {},
       summaryErrors: {},
       stepIndex: 0,
@@ -429,10 +426,7 @@ export function createFormStore(schema: FormSchema, getOptions: () => FormStoreO
         ? (state.errors[name] ?? null)
         : validateField(field, state.values[name] ?? "");
 
-    setState({
-      touched: { ...state.touched, [name]: true },
-      errors: withEntry(state.errors, name, error),
-    });
+    setState({ errors: withEntry(state.errors, name, error) });
   }
 
   function addItem(groupName: string) {
@@ -490,7 +484,6 @@ export function createFormStore(schema: FormSchema, getOptions: () => FormStoreO
       itemIds,
       values: withoutKeys(state.values, names),
       errors: withoutKeys(state.errors, names),
-      touched: withoutKeys(state.touched, names),
       checking: withoutKeys(state.checking, names),
       summaryErrors: withoutKeys(state.summaryErrors, names),
       isDirty: true,
@@ -549,13 +542,9 @@ export function createFormStore(schema: FormSchema, getOptions: () => FormStoreO
     });
   }
 
-  function markAttempted(fields: LeafField[], stepIndexes: number[]) {
-    const visibleNames = fields
-      .filter((field) => isVisible(field, state.values))
-      .map((field) => [field.name, true]);
-
+  /** From now on the fields of these steps are checked on every change. */
+  function markAttempted(stepIndexes: number[]) {
     setState({
-      touched: { ...state.touched, ...Object.fromEntries(visibleNames) },
       attemptedSteps: [...new Set([...state.attemptedSteps, ...stepIndexes])],
       submitError: null,
     });
@@ -568,7 +557,7 @@ export function createFormStore(schema: FormSchema, getOptions: () => FormStoreO
     }
 
     const stepFields = leaves.filter((field) => getStep(field) === state.stepIndex);
-    markAttempted(stepFields, [state.stepIndex]);
+    markAttempted([state.stepIndex]);
 
     // A server check that still runs does not hold the user here. Submit waits for it.
     const errors = collectErrors(stepFields);
@@ -636,10 +625,7 @@ export function createFormStore(schema: FormSchema, getOptions: () => FormStoreO
     const msSince = (start: number) => Math.round(performance.now() - start);
     emit({ type: "submit_attempted", formId, msSinceViewed: msSince(viewedAt) });
 
-    markAttempted(
-      leaves,
-      steps.map((_step, index) => index),
-    );
+    markAttempted(steps.map((_step, index) => index));
     setState({ isSubmitting: true });
 
     // Wait for the server checks that are still running. The user may type

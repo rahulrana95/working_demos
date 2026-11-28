@@ -3,10 +3,9 @@
  * One small component for each kind of control, and a registry that maps a
  * field type from the schema to its component. A new field type is one new
  * component and one new line in the registry. The form itself does not change.
- * The staff answer lets the page add its own types, and takes the text of the
- * empty choice from `messages`.
+ * The staff answer takes the text of the empty choice from `messages`.
  */
-import type { ComponentType } from "react";
+import type { ChangeEvent, ComponentType, HTMLAttributes } from "react";
 import type { FormMessages } from "./messages";
 import type { FieldSchema, FieldType, FieldValue } from "./types";
 
@@ -14,69 +13,40 @@ export interface ControlProps {
   field: FieldSchema;
   value: FieldValue;
   onChange: (value: FieldValue) => void;
-  /** The same for every control. Spread it on the element the user types in. */
-  controlProps: {
-    /** Focus goes to the element with this id when the field has an error. */
-    id: string;
-    name: string;
-    required: boolean | undefined;
-    "aria-required": boolean | undefined;
-    autoComplete: string | undefined;
-    "aria-invalid": true | undefined;
-    "aria-describedby": string | undefined;
-    onBlur: () => void;
-  };
-  /** The id of the visible label. A group of controls, like radio buttons, names itself with it. */
-  labelId: string;
+  /** The same for every control: id, name, `required`, the ARIA attributes and `onBlur`. */
+  shared: HTMLAttributes<HTMLElement> & { name: string; required?: boolean; autoComplete?: string };
   messages: FormMessages;
 }
 
-export interface FieldTypeDefinition {
-  component: ComponentType<ControlProps>;
-  /**
-   * True when the component draws several controls, like radio buttons. Then
-   * the form does not tie the label to one control. The component must put
-   * `aria-labelledby={labelId}` on the element around its controls.
-   */
-  isGroup?: boolean;
-}
+/** Text, email, number and long text are one component: they differ in two attributes. */
+function TextControl({ field, value, onChange, shared }: ControlProps) {
+  const props = {
+    ...shared,
+    className: "field__input",
+    placeholder: field.placeholder,
+    value: String(value),
+    onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      onChange(event.target.value),
+  };
+  if (field.type === "textarea") return <textarea {...props} rows={3} />;
 
-function InputControl({ field, value, onChange, controlProps }: ControlProps) {
   // A number field is a text box that asks a phone for the number keys.
   // `type="number"` changes the value when the user scrolls over the box, and
   // it accepts the letter "e". Our own rule checks that the text is a number.
   const isNumber = field.type === "number";
-
   return (
     <input
-      {...controlProps}
-      className="field__input"
+      {...props}
       type={isNumber ? "text" : field.type}
       inputMode={isNumber ? "decimal" : undefined}
-      placeholder={field.placeholder}
-      value={String(value)}
-      onChange={(event) => onChange(event.target.value)}
     />
   );
 }
 
-function TextareaControl({ field, value, onChange, controlProps }: ControlProps) {
-  return (
-    <textarea
-      {...controlProps}
-      className="field__input"
-      rows={3}
-      placeholder={field.placeholder}
-      value={String(value)}
-      onChange={(event) => onChange(event.target.value)}
-    />
-  );
-}
-
-function SelectControl({ field, value, onChange, controlProps, messages }: ControlProps) {
+function SelectControl({ field, value, onChange, shared, messages }: ControlProps) {
   return (
     <select
-      {...controlProps}
+      {...shared}
       className="field__input"
       value={String(value)}
       onChange={(event) => onChange(event.target.value)}
@@ -92,10 +62,10 @@ function SelectControl({ field, value, onChange, controlProps, messages }: Contr
   );
 }
 
-function CheckboxControl({ value, onChange, controlProps }: ControlProps) {
+function CheckboxControl({ value, onChange, shared }: ControlProps) {
   return (
     <input
-      {...controlProps}
+      {...shared}
       className="field__checkbox"
       type="checkbox"
       checked={value === true}
@@ -104,24 +74,22 @@ function CheckboxControl({ value, onChange, controlProps }: ControlProps) {
   );
 }
 
-export const BUILT_IN_FIELD_TYPES: Record<FieldType, FieldTypeDefinition> = {
-  text: { component: InputControl },
-  email: { component: InputControl },
-  number: { component: InputControl },
-  textarea: { component: TextareaControl },
-  select: { component: SelectControl },
-  checkbox: { component: CheckboxControl },
+const CONTROLS: Record<FieldType, ComponentType<ControlProps>> = {
+  text: TextControl,
+  email: TextControl,
+  number: TextControl,
+  textarea: TextControl,
+  select: SelectControl,
+  checkbox: CheckboxControl,
 };
 
 /**
- * Finds the definition of a field type. The schema comes from a server, so
+ * Finds the component for a field type. The schema comes from a server, so
  * the type can be one this code does not know. Then the answer is undefined.
  */
-export function getFieldType(
-  fieldTypes: Record<string, FieldTypeDefinition>,
-  type: string,
-): FieldTypeDefinition | undefined {
+export function getControl(type: string): ComponentType<ControlProps> | undefined {
   // The own-property check stops a type like "constructor" from finding
   // something that every JavaScript object has.
-  return Object.prototype.hasOwnProperty.call(fieldTypes, type) ? fieldTypes[type] : undefined;
+  const isKnown = Object.prototype.hasOwnProperty.call(CONTROLS, type);
+  return isKnown ? CONTROLS[type as FieldType] : undefined;
 }

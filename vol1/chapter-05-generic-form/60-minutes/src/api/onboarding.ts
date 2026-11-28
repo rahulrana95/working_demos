@@ -1,12 +1,12 @@
 /*
  * NOT PART OF THE INTERVIEW.
  * A fake server for the demo. It "sends" the form definition as plain data,
- * it checks whether an email address is free, and it takes the submitted
- * values after a short delay.
+ * and it takes the submitted values after a short delay. It refuses one email
+ * address and one company name, to show errors that only a server can find.
  */
-import type { AsyncValidator, FieldSchema, FormSchema, FormValues, SubmitErrors } from "../form";
+import type { FieldSchema, FormSchema, FormValues, SubmitErrors } from "../form";
 
-/** The demo server says that this address already belongs to an employee. */
+/** The demo server says, when the form is submitted, that this address belongs to an employee. */
 export const TAKEN_EMAIL = "taken@example.com";
 
 /** The demo server refuses this company name when the form is submitted. */
@@ -32,9 +32,8 @@ export const onboardingSchema: FormSchema = {
       type: "email",
       required: true,
       autoComplete: "email",
-      helpText: `We send the joining letter to this address. Try ${TAKEN_EMAIL}.`,
+      helpText: `We send the joining letter to this address. The server refuses ${TAKEN_EMAIL}.`,
       rules: [{ type: "email" }],
-      asyncRule: { name: "emailIsFree" },
     },
     {
       name: "employmentType",
@@ -53,18 +52,6 @@ export const onboardingSchema: FormSchema = {
       required: true,
       helpText: `The company that sends us the invoice. The server refuses “${REFUSED_COMPANY}”.`,
       visibleWhen: { field: "employmentType", equals: "contractor" },
-    },
-    {
-      // "radio" is not a built-in type. The demo page adds it with `fieldTypes`.
-      name: "workPlace",
-      label: "Place of work",
-      type: "radio",
-      required: true,
-      options: [
-        { value: "office", label: "Office" },
-        { value: "remote", label: "Remote" },
-        { value: "hybrid", label: "Hybrid" },
-      ],
     },
     {
       name: "country",
@@ -147,21 +134,6 @@ export function createStressSchema(fieldCount: number): FormSchema {
 }
 
 const SUBMIT_DELAY_MS = 600;
-const CHECK_DELAY_MS = 500;
-
-/** Answers after a delay, and stops early when the form cancels the check. */
-export const checkEmailIsFree: AsyncValidator = (value, signal) =>
-  new Promise((resolve, reject) => {
-    const timerId = setTimeout(() => {
-      const isTaken = String(value).trim().toLowerCase() === TAKEN_EMAIL;
-      resolve(isTaken ? "An employee with this email address already exists." : null);
-    }, CHECK_DELAY_MS);
-
-    signal.addEventListener("abort", () => {
-      clearTimeout(timerId);
-      reject(new DOMException("The check was cancelled", "AbortError"));
-    });
-  });
 
 export interface FakeServerOptions {
   /** Return true to make the next submit fail. */
@@ -178,12 +150,15 @@ export function createSubmit({ shouldFail }: FakeServerOptions) {
             formError: "The server is not available. Please try again in a minute.",
           };
           reject(errors);
-        } else if (values.companyName === REFUSED_COMPANY) {
-          const errors: SubmitErrors = {
-            fieldErrors: {
-              companyName: `${REFUSED_COMPANY} is not on the list of approved companies.`,
-            },
-          };
+        } else if (values.workEmail === TAKEN_EMAIL || values.companyName === REFUSED_COMPANY) {
+          const fieldErrors: Record<string, string> = {};
+          if (values.workEmail === TAKEN_EMAIL) {
+            fieldErrors.workEmail = "An employee with this email address already exists.";
+          }
+          if (values.companyName === REFUSED_COMPANY) {
+            fieldErrors.companyName = `${REFUSED_COMPANY} is not on the list of approved companies.`;
+          }
+          const errors: SubmitErrors = { fieldErrors };
           reject(errors);
         } else {
           resolve(values);
