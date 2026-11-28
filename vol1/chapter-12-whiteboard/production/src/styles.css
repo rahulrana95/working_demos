@@ -1,0 +1,230 @@
+/* NOT PART OF THE INTERVIEW. Styles for the demo page and the whiteboard. */
+:root {
+  --color-text: #1c1f23;
+  --color-muted: #5b6470;
+  --color-border: #c5ccd6;
+  --color-accent: #1a56db;
+  --color-accent-soft: #e6eefc;
+  --color-surface: #ffffff;
+  --color-page: #f5f6f8;
+  --color-danger: #b42318;
+  --radius: 8px;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.page h1 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+}
+
+.page__intro {
+  margin: 0 0 24px;
+  color: var(--color-muted);
+}
+
+.page__loaders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+}
+
+button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 14px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:focus-visible,
+.whiteboard__canvas:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Whiteboard ---------- */
+
+.whiteboard {
+  padding: 4px;
+}
+
+.whiteboard__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-end: 8px;
+}
+
+/* The chosen tool has a thicker, darker border and bold text, not only a colour. */
+.whiteboard__toolbar button[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  border-width: 4px;
+  padding: 6px 12px;
+  background: var(--color-accent-soft);
+  font-weight: 700;
+}
+
+.whiteboard__toolbar button[aria-disabled="true"] {
+  border-style: dashed;
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+
+.whiteboard__canvas {
+  display: block;
+  /* The canvas follows the width of its box. The component watches its size. */
+  inline-size: 100%;
+  block-size: 420px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  /* Without this, a finger that drags on the canvas scrolls the page instead of drawing. */
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.whiteboard__swatch {
+  display: inline-block;
+  inline-size: 12px;
+  block-size: 12px;
+  margin-inline-end: 6px;
+  border: 1px solid var(--color-text);
+  border-radius: 50%;
+}
+
+.whiteboard__failure {
+  padding: 16px;
+  border: 2px solid var(--color-danger);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (forced-colors: active) {
+  .whiteboard__toolbar button[aria-pressed="true"] {
+    border-color: Highlight;
+  }
+
+  .whiteboard__toolbar button[aria-disabled="true"] {
+    border-color: GrayText;
+    color: GrayText;
+  }
+
+  /* The swatch shows a colour that the user chose, so the system must not replace it. */
+  .whiteboard__swatch {
+    forced-color-adjust: none;
+  }
+}
+
+/* ---------- Demo page ---------- */
+
+.users {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 24px;
+}
+
+.user h2 {
+  margin: 0 0 4px;
+  font-size: 1.125rem;
+}
+
+.user__dot {
+  display: inline-block;
+  inline-size: 12px;
+  block-size: 12px;
+  border-radius: 50%;
+}
+
+.user__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 44px;
+}
+
+.user__toggle input {
+  inline-size: 20px;
+  block-size: 20px;
+}
+
+/* ---------- Demo panel ---------- */
+
+.panel {
+  margin-block-start: 24px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.panel p {
+  margin: 0 0 8px;
+}
+
+.panel__stacks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.panel__log {
+  max-height: 180px;
+  margin: 0 0 8px;
+  padding-inline-start: 24px;
+  overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875rem;
+}
+
+.panel__hint {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
