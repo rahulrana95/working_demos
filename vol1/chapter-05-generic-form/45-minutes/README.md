@@ -36,25 +36,24 @@ because JSON cannot hold a comment: none of them is part of the interview.
 
 | File                      | In the interview? | Time       | Lines of code |
 | ------------------------- | ----------------- | ---------- | ------------- |
-| `src/form/types.ts`       | Yes               | 3 minutes  | 35            |
-| `src/form/validation.ts`  | Yes               | 10 minutes | 89            |
-| `src/form/useForm.ts`     | Yes               | 12 minutes | 92            |
-| `src/form/Form.tsx`       | Yes               | 10 minutes | 108           |
-| `src/form/fields.tsx`     | Yes               | 6 minutes  | 84            |
-| `src/form/warnOnce.ts`    | Yes               | 1 minute   | 8             |
+| `src/form/types.ts`       | Yes               | 3 minutes  | 31            |
+| `src/form/validation.ts`  | Yes               | 10 minutes | 68            |
+| `src/form/useForm.ts`     | Yes               | 12 minutes | 60            |
+| `src/form/Form.tsx`       | Yes               | 10 minutes | 87            |
+| `src/form/fields.tsx`     | Yes               | 6 minutes  | 67            |
+| `src/form/warnOnce.ts`    | Yes               | 1 minute   | 7             |
 | `*.test.ts`, `*.test.tsx` | No                |            |               |
 | `src/App.tsx`, `src/api/` | No                |            |               |
 | `src/styles.css`          | No                |            |               |
 
-Lines of code are counted without blank lines and comments: 416 in total.
+Lines of code are counted without blank lines and comments: 320 in total.
 The folder has 101 tests.
 
-That is more than most people type in 42 minutes. If you run short, write the
-text input and the select in `fields.tsx` and say the other two controls
-aloud: they are the same five lines with another element. Do not cut
-`validation.ts` or `useForm.ts`. They are what the interviewer asks about.
+That is about 42 minutes of typing for someone who has practised it. The
+other 3 minutes go to walking the interviewer through the rule for when a
+field is checked.
 
-The component code is 2,457 bytes when it is minified and compressed with gzip,
+The component code is 2,410 bytes when it is minified and compressed with gzip,
 without React. Measure it again with:
 
 ```bash
@@ -94,6 +93,9 @@ const schema: FormSchema = {
 - Rules: `minLength`, `maxLength`, `min`, `max`, `pattern`, `email`. Each can have its own `message`.
 - `visibleWhen` is data, never a function, so the schema stays plain JSON.
 
+Text, email, number and long text are one control component: they differ in
+two attributes. The select and the tick box are the other two.
+
 The component has two props: `schema` and `onSubmit`. `onSubmit` gets the
 values of the fields on screen. Return a promise, and reject it when the
 server fails: the form then shows an error and keeps the answers.
@@ -115,7 +117,7 @@ under the "Form" heading. The other rules style the demo page.
 - An error is marked with a thicker real border and a bar beside the field, never with a shadow or with colour alone. High-contrast mode keeps both.
 
 The measured JavaScript size does not include this CSS. The form rules are
-712 bytes more, minified and compressed with gzip. Measure them again with:
+711 bytes more, minified and compressed with gzip. Measure them again with:
 
 ```bash
 awk '/^\/\* -+ /{on = !/Demo/} on' src/styles.css | npx esbuild --loader=css --minify | gzip -9 -c | wc -c
@@ -152,7 +154,7 @@ so every key press draws every field. The 60-minute answer removes that.
 ## Accessibility
 
 - Every control has a `<label>`. A required control has `required` and `aria-required`, and the label shows "(required)" to the eye only.
-- A control in error has `aria-invalid`. Its help text and its error text are linked with `aria-describedby`, so a screen reader reads them after the label.
+- A control in error has `aria-invalid`. Its help text and its error text sit in one element that `aria-describedby` points at, so a screen reader reads them after the label, the help first.
 - After a failed submit, focus moves to the first field with an error. A summary at the top of the form, in a `role="alert"` box, lists every error.
 - The submit button is never disabled. While the form is sent it has `aria-busy` and the text "Sending…".
 - The form has `noValidate`, so the error bubbles of the browser do not fight with our messages.

@@ -38,7 +38,7 @@ Nothing in this folder. Every source file says so on its first lines:
 | `src/form/validation.ts`      | Pure functions: conditions, rules, error texts, the values to submit         | 165           |
 | `src/form/checkSchema.ts`     | Finds the mistakes in a schema                                               | 129           |
 | `src/form/draft.ts`           | Reads and writes the draft in `sessionStorage`, and never throws             | 72            |
-| `src/form/formStore.ts`       | The state: values, errors, steps, group items, server checks, submit, events | 562           |
+| `src/form/formStore.ts`       | The state: values, errors, steps, group items, server checks, submit, events | 549           |
 | `src/form/Form.tsx`           | The form, the steps, the buttons, focus, the leave warning                   | 247           |
 | `src/form/Field.tsx`          | One field: label, control, help and error                                    | 102           |
 | `src/form/GroupField.tsx`     | A group that repeats, with its Add and Remove buttons                        | 84            |
@@ -50,10 +50,10 @@ Nothing in this folder. Every source file says so on its first lines:
 | `src/form/RenderCount.tsx`    | Debug help: how many times a field was drawn                                 | 16            |
 | `src/form/index.ts`           | The exports                                                                  | 39            |
 
-Lines of code are counted without blank lines and comments: 1,735 in total.
+Lines of code are counted without blank lines and comments: 1,722 in total.
 The folder has 277 tests.
 
-The component code is 8,634 bytes when it is minified and compressed with gzip,
+The component code is 8,571 bytes when it is minified and compressed with gzip,
 without React. Measure it again with:
 
 ```bash
@@ -62,20 +62,22 @@ npx esbuild src/form/index.ts --bundle --minify --format=esm --external:react --
 
 ## What the first week adds
 
-| Addition                             | What it does                                                                                                                                                                     |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `checkSchema(schema)`                | Finds a field name used twice, a condition on a missing field, a circle of conditions, a select with no options, a broken or too long pattern, and mistakes in steps and groups. |
-| Report in development                | In development the form shows the list of problems in place of a broken form. In a production build it still tries to draw the form.                                             |
-| Pattern limit (`MAX_PATTERN_LENGTH`) | A pattern longer than 200 characters is never run. An admin writes the patterns, and a bad one can freeze the page.                                                              |
-| Steps (`schema.steps`)               | "Next" checks only the current step. A list shows the steps, with `aria-current="step"`. Focus moves to the heading of the new step.                                             |
-| Groups that repeat (type `group`)    | The user adds and removes items, between `minItems` and `maxItems`. Buttons say "Remove dependant 2". Focus has a sensible place after a remove.                                 |
-| Draft (`saveDraft`)                  | The answers are saved in `sessionStorage` 500 ms after the last change, under the schema id and `version`. Fields marked `sensitive` are never saved.                            |
-| Leave warning (`warnBeforeLeave`)    | The browser warns before the page is left with answers that were not sent. The listener is there only while the form is dirty.                                                   |
-| Events (`onEvent`)                   | `form_viewed`, `field_error`, `submit_attempted`, `submit_succeeded`, `submit_failed`, with times. No event holds a value of a field.                                            |
-| Time limits                          | `onSubmit` gets an `AbortSignal` and is given up after `submitTimeoutMs`. A server check is given up after `asyncTimeoutMs`.                                                     |
-| Field types `date` and `radio`       | Built in. Radio buttons are a named `radiogroup`.                                                                                                                                |
-| Plural forms (`Intl.PluralRules`)    | The title of the summary is worded by the plural rules of the language.                                                                                                          |
-| Enter while a word is being composed | With a Hindi, Japanese or Chinese keyboard, the Enter that takes a word does not send the form.                                                                                  |
+| Addition                                 | What it does                                                                                                                                                                                                                               |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Checks on the server (`asyncRule`)       | A field can name a check, like "is this email taken?". The page gives the function in `asyncValidators`. It runs 300 ms after the last key press, is aborted when the user types again, and an old answer never wins. Submit waits for it. |
+| Field types from the page (`fieldTypes`) | Another team adds a field type, or replaces a built-in one, without a change to the form.                                                                                                                                                  |
+| `checkSchema(schema)`                    | Finds a field name used twice, a condition on a missing field, a circle of conditions, a select with no options, a broken or too long pattern, and mistakes in steps and groups.                                                           |
+| Report in development                    | In development the form shows the list of problems in place of a broken form. In a production build it still tries to draw the form.                                                                                                       |
+| Pattern limit (`MAX_PATTERN_LENGTH`)     | A pattern longer than 200 characters is never run. An admin writes the patterns, and a bad one can freeze the page.                                                                                                                        |
+| Steps (`schema.steps`)                   | "Next" checks only the current step. A list shows the steps, with `aria-current="step"`. Focus moves to the heading of the new step.                                                                                                       |
+| Groups that repeat (type `group`)        | The user adds and removes items, between `minItems` and `maxItems`. Buttons say "Remove dependant 2". Focus has a sensible place after a remove.                                                                                           |
+| Draft (`saveDraft`)                      | The answers are saved in `sessionStorage` 500 ms after the last change, under the schema id and `version`. Fields marked `sensitive` are never saved.                                                                                      |
+| Leave warning (`warnBeforeLeave`)        | The browser warns before the page is left with answers that were not sent. The listener is there only while the form is dirty.                                                                                                             |
+| Events (`onEvent`)                       | `form_viewed`, `field_error`, `submit_attempted`, `submit_succeeded`, `submit_failed`, with times. No event holds a value of a field.                                                                                                      |
+| Time limits                              | `onSubmit` gets an `AbortSignal` and is given up after `submitTimeoutMs`. A server check is given up after `asyncTimeoutMs`.                                                                                                               |
+| Field types `date` and `radio`           | Built in. Radio buttons are a named `radiogroup`.                                                                                                                                                                                          |
+| Plural forms (`Intl.PluralRules`)        | The title of the summary is worded by the plural rules of the language.                                                                                                                                                                    |
+| Enter while a word is being composed     | With a Hindi, Japanese or Chinese keyboard, the Enter that takes a word does not send the form.                                                                                                                                            |
 
 ## The props
 
@@ -97,6 +99,17 @@ In this order:
 | `onEvent`            | none              | Tells the monitoring of the page what happens.                                         |
 | `showSchemaProblems` | on in development | Shows the mistakes of the schema in place of the form.                                 |
 | `showRenderCounts`   | `false`           | Debug help: each field shows how many times it was drawn.                              |
+
+### The contract of an async validator
+
+`(value, signal) => Promise<string | null>`. Resolve with an error text, or
+with `null` when the value is fine. If it rejects, throws or takes longer
+than `asyncTimeoutMs`, the user is not blamed: the field shows no error, and
+the server checks again on submit. Stop the request when the signal is aborted.
+
+Keep the same object for `fieldTypes` and `messages` between renders (create
+them outside the component). A new object each time would draw every field
+again.
 
 ### The contract of `onSubmit`
 
@@ -138,11 +151,19 @@ awk '/^\/\* -+ /{on = !/Demo/} on' src/styles.css | npx esbuild --loader=css --m
 
 Everything in the table of the [60-minute answer](../60-minutes/README.md#why-it-holds-at-scale)
 holds here too, with the same tests in `Form.test.tsx`. The rows below are new.
-Their tests are in `Form.production.test.tsx`, `checkSchema.test.ts`,
+The first six were moved here from the staff answer, to keep that one small
+enough to type: their tests are in `Form.test.tsx` too. The tests of the
+others are in `Form.production.test.tsx`, `checkSchema.test.ts`,
 `draft.test.ts` and `validation.test.ts`.
 
 | Pressure                                              | What protects us                                                        | Test that proves it                                                                       |
 | ----------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| The user types fast in a field the server checks      | Debounce: one request after the user pauses                             | `asks the server one time, 300 ms after the last key press`                               |
+| An old answer of the server arrives late              | The old check is aborted and its answer is ignored                      | `never lets an old answer overwrite a newer one`                                          |
+| The user submits while a check runs                   | Submit waits for the check, then decides                                | `submit waits for a check that is still running, then sends`                              |
+| The check itself fails                                | No error on the field. The server checks again on submit                | `does not blame the user when the check itself fails`                                     |
+| The form is removed while a check runs                | Timers are cleared and requests aborted                                 | `cancels the running check when the form is removed`                                      |
+| Another team needs a new kind of field                | `fieldTypes` adds it with no change to the form                         | `draws a type that the page added, with label, rules and submit like any field`           |
 | An admin saves a schema with mistakes                 | `checkSchema` reports every problem, not only the first                 | `reports every problem of a schema, not only the first`                                   |
 | Two fields each wait for the other                    | The circle of conditions is found                                       | `finds two fields that each wait for the other`                                           |
 | An admin pastes a very long pattern                   | It is never run                                                         | `is never run, does not block the user, and is reported one time`                         |
@@ -168,6 +189,11 @@ Their tests are in `Form.production.test.tsx`, `checkSchema.test.ts`,
 
 Everything in the [60-minute answer](../60-minutes/README.md#edge-cases-covered), and:
 
+- The server is not asked about an empty value, or about a value that our own rules refuse.
+- A second check starts while the first is in flight: the first is aborted, and "Checking…" stays until the newer one answers.
+- An error that a server check found stays when focus leaves the field, and it blocks the submit until the value changes.
+- The schema names a check that the page did not give: one warning in the console, and the field is not blocked.
+- A field type that the page did not add shows the "unsupported" box. A type from the page can replace a built-in one.
 - Enter in a field means "Next" on every step but the last. It never sends the form early.
 - "Back" does not check anything and keeps the answers.
 - A field on a later step is not checked while the user types in it for the first time, also after a failed "Next" on an earlier step.
@@ -190,6 +216,9 @@ Everything in the [60-minute answer](../60-minutes/README.md#edge-cases-covered)
 ## Accessibility
 
 Everything in the [60-minute answer](../60-minutes/README.md#accessibility), and:
+
+- A field with a server check has a hidden `role="status"` line that reads the outcome. It stays silent while the check runs, so a screen reader does not say "Checking…" after every key press. The visible "Checking…" is hidden from screen readers.
+- A field type with several controls, like radio buttons, sets `isGroup`. Then the form does not tie the label to one control, and the component names its group with `aria-labelledby`.
 
 - The steps are an ordered list with a name. The current step has `aria-current="step"`. When the step changes, focus moves to its heading, "Step 2 of 3: The job", so a screen reader says where the user is.
 - A group is a `<fieldset>` with a `<legend>`, and each item is one too. A screen reader says "Dependant 2, Name", not only "Name".

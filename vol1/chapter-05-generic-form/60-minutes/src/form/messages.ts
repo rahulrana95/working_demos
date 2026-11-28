@@ -1,15 +1,16 @@
 /*
- * PART OF THE INTERVIEW: yes (about 2 minutes).
+ * PART OF THE INTERVIEW: yes (about 3 minutes).
  * Every text that the form itself writes is here, in one object. Another team
  * can replace any of them to translate the form. The labels and help texts
  * are not here: they come from the schema, already in the right language.
  */
 
 export const DEFAULT_MESSAGES = {
+  // One text for each check that can fail. The key is the type of the error.
   required: (label: string) => `${label} is required.`,
   number: (label: string) => `${label} must be a number.`,
-  minLength: (label: string, count: number) => `${label} must have at least ${count} characters.`,
-  maxLength: (label: string, count: number) => `${label} must have at most ${count} characters.`,
+  minLength: (label: string, limit: number) => `${label} must have at least ${limit} characters.`,
+  maxLength: (label: string, limit: number) => `${label} must have at most ${limit} characters.`,
   min: (label: string, limit: number) => `${label} must be ${limit} or more.`,
   max: (label: string, limit: number) => `${label} must be ${limit} or less.`,
   email: (label: string) => `${label} must be an email address, like name@example.com.`,
@@ -18,8 +19,6 @@ export const DEFAULT_MESSAGES = {
   requiredMark: "(required)",
   /** The first choice of a select with no placeholder. */
   selectPlaceholder: "Select…",
-  /** Shown beside a field while a server check runs. */
-  checking: "Checking…",
   summaryTitle: (errorCount: number) =>
     errorCount === 1 ? "Please fix this problem:" : `Please fix these ${errorCount} problems:`,
   submit: "Submit",

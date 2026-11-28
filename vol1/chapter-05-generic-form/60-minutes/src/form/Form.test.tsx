@@ -6,8 +6,8 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { Form } from "./Form";
 import type { FormProps } from "./Form";
-import type { ControlProps } from "./fields";
-import type { AsyncValidator, FieldSchema, FormSchema, FormValues, SubmitHandler } from "./types";
+import { showRenderCounts } from "./RenderCount";
+import type { FieldSchema, FormSchema, FormValues, SubmitHandler } from "./types";
 
 const schema: FormSchema = {
   id: "test",
@@ -83,13 +83,6 @@ function renderForm(
 ) {
   const view = render(<Form schema={formSchema} onSubmit={onSubmit} {...props} />);
   return { onSubmit, ...view };
-}
-
-/** Moves the fake clock forward and lets React finish its updates. */
-async function wait(ms: number): Promise<void> {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(ms);
-  });
 }
 
 function getControl(label: string): HTMLInputElement {
@@ -755,6 +748,9 @@ describe("Form: accessibility", () => {
 describe("Form: speed with many fields", () => {
   const FIELD_COUNT = 300;
 
+  beforeEach(() => showRenderCounts(true));
+  afterEach(() => showRenderCounts(false));
+
   const bigSchema: FormSchema = {
     id: "big",
     fields: [
@@ -798,7 +794,7 @@ describe("Form: speed with many fields", () => {
   }
 
   it("draws every field one time at the start", () => {
-    renderForm(vi.fn(), bigSchema, { showRenderCounts: true });
+    renderForm(vi.fn(), bigSchema);
 
     const counts = Object.values(getRenderCounts());
 
@@ -807,8 +803,17 @@ describe("Form: speed with many fields", () => {
     expect(counts.every((count) => count === 1)).toBe(true);
   });
 
+  it("does not count turning the counters on as a draw of the field", () => {
+    showRenderCounts(false);
+    renderForm(vi.fn(), bigSchema);
+
+    act(() => showRenderCounts(true));
+
+    expect(Object.values(getRenderCounts()).every((count) => count === 1)).toBe(true);
+  });
+
   it("draws only the changed field again when the user types in one of 300 fields", () => {
-    renderForm(vi.fn(), bigSchema, { showRenderCounts: true });
+    renderForm(vi.fn(), bigSchema);
 
     const field7 = getInputByName("field7");
     fireEvent.change(field7, { target: { value: "a" } });
@@ -820,7 +825,7 @@ describe("Form: speed with many fields", () => {
   });
 
   it("draws again only the fields whose visibility depends on the changed field", () => {
-    renderForm(vi.fn(), bigSchema, { showRenderCounts: true });
+    renderForm(vi.fn(), bigSchema);
 
     fireEvent.click(getInputByName("showExtra"));
 
@@ -833,10 +838,10 @@ describe("Form: speed with many fields", () => {
 
   it("does not draw the fields again when the page around the form is drawn again", () => {
     const onSubmit = vi.fn();
-    const { rerender } = renderForm(onSubmit, bigSchema, { showRenderCounts: true });
+    const { rerender } = renderForm(onSubmit, bigSchema);
 
-    rerender(<Form schema={bigSchema} onSubmit={onSubmit} showRenderCounts />);
-    rerender(<Form schema={bigSchema} onSubmit={vi.fn()} showRenderCounts />);
+    rerender(<Form schema={bigSchema} onSubmit={onSubmit} />);
+    rerender(<Form schema={bigSchema} onSubmit={vi.fn()} />);
 
     expect(namesDrawnMoreThanOnce()).toEqual([]);
   });
@@ -925,283 +930,6 @@ describe("Form: richer conditions", () => {
     await flush();
 
     expect(onSubmit).toHaveBeenCalledWith({ kind: "contractor", country: "" });
-  });
-});
-
-describe("Form: checks on the server", () => {
-  const DEBOUNCE_MS = 300;
-
-  const asyncSchema: FormSchema = {
-    id: "async",
-    fields: [
-      {
-        name: "email",
-        label: "Email",
-        type: "email",
-        required: true,
-        rules: [{ type: "email" }],
-        asyncRule: { name: "emailIsFree" },
-      },
-      { name: "city", label: "City", type: "text" },
-    ],
-  };
-
-  interface Check {
-    value: string;
-    signal: AbortSignal;
-    answer: (error: string | null) => void;
-    fail: () => void;
-  }
-
-  /** A validator that the test answers by hand, to control the order of the answers. */
-  function createValidator() {
-    const checks: Check[] = [];
-    const validator: AsyncValidator = (value, signal) =>
-      new Promise((resolve, reject) => {
-        checks.push({
-          value: String(value),
-          signal,
-          answer: resolve,
-          fail: () => reject(new Error("offline")),
-        });
-      });
-    return { checks, validator };
-  }
-
-  function renderAsyncForm(onSubmit: SubmitHandler = vi.fn()) {
-    const { checks, validator } = createValidator();
-    const view = renderForm(onSubmit, asyncSchema, {
-      asyncValidators: { emailIsFree: validator },
-    });
-    return { ...view, checks };
-  }
-
-  /** The line that a screen reader reads out. It is hidden on screen. */
-  function getStatus(): HTMLElement {
-    return screen.getByRole("status");
-  }
-
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("asks the server one time, 300 ms after the last key press", async () => {
-    const { checks } = renderAsyncForm();
-
-    type("Email", "a@example.co");
-    await wait(DEBOUNCE_MS - 1);
-    type("Email", "a@example.com");
-    await wait(DEBOUNCE_MS - 1);
-
-    expect(checks).toHaveLength(0);
-
-    await wait(1);
-
-    expect(checks.map((check) => check.value)).toEqual(["a@example.com"]);
-  });
-
-  it("shows “Checking…” while it waits, and removes it after the answer", async () => {
-    const { checks } = renderAsyncForm();
-
-    type("Email", "a@example.com");
-
-    expect(screen.getByText("Checking…", { selector: ".field__checking" })).toBeVisible();
-    // A screen reader hears only the outcome, not "Checking…" after every key press.
-    expect(screen.getByText("Checking…")).toHaveAttribute("aria-hidden", "true");
-    expect(getStatus()).toBeEmptyDOMElement();
-
-    await wait(DEBOUNCE_MS);
-    checks[0].answer(null);
-    await flush();
-
-    expect(screen.queryByText("Checking…")).toBeNull();
-    expect(getStatus()).toBeEmptyDOMElement();
-    expect(getControl("Email")).not.toHaveAttribute("aria-invalid");
-  });
-
-  it("shows the error of the server on the field, also before the user has left it", async () => {
-    const { checks } = renderAsyncForm();
-
-    type("Email", "taken@example.com");
-    await wait(DEBOUNCE_MS);
-    checks[0].answer("This address is taken.");
-    await flush();
-
-    expect(getControl("Email")).toHaveAttribute("aria-invalid", "true");
-    expect(getControl("Email")).toHaveAccessibleDescription("This address is taken.");
-    expect(getStatus()).toHaveTextContent("This address is taken.");
-  });
-
-  it("keeps the error of the server when focus leaves the field", async () => {
-    const { checks } = renderAsyncForm();
-
-    type("Email", "taken@example.com");
-    await wait(DEBOUNCE_MS);
-    checks[0].answer("This address is taken.");
-    await flush();
-    act(() => {
-      getControl("Email").focus();
-      getControl("City").focus();
-    });
-
-    expect(getControl("Email")).toHaveAccessibleDescription("This address is taken.");
-  });
-
-  it("removes the error of the server as soon as the user types again", async () => {
-    const { checks } = renderAsyncForm();
-
-    type("Email", "taken@example.com");
-    await wait(DEBOUNCE_MS);
-    checks[0].answer("This address is taken.");
-    await flush();
-    type("Email", "free@example.com");
-
-    expect(getControl("Email")).not.toHaveAttribute("aria-invalid");
-  });
-
-  it("never lets an old answer overwrite a newer one", async () => {
-    const { checks } = renderAsyncForm();
-
-    type("Email", "taken@example.com");
-    await wait(DEBOUNCE_MS);
-    type("Email", "free@example.com");
-    await wait(DEBOUNCE_MS);
-
-    // The newer check answers first. Then the old one arrives late.
-    checks[1].answer(null);
-    await flush();
-    checks[0].answer("This address is taken.");
-    await flush();
-
-    expect(checks[0].signal.aborted).toBe(true);
-    expect(getControl("Email")).not.toHaveAttribute("aria-invalid");
-    expect(screen.queryByText("This address is taken.")).toBeNull();
-  });
-
-  it("keeps “Checking…” on screen when an old check ends while a newer one runs", async () => {
-    const { checks } = renderAsyncForm();
-
-    type("Email", "a@example.com");
-    await wait(DEBOUNCE_MS);
-    type("Email", "b@example.com");
-    await wait(DEBOUNCE_MS);
-    checks[0].answer(null);
-    await flush();
-
-    expect(screen.getByText("Checking…", { selector: ".field__checking" })).toBeVisible();
-  });
-
-  it("does not ask the server about a value that our own rules refuse, or an empty one", async () => {
-    const { checks } = renderAsyncForm();
-
-    type("Email", "not-an-email");
-    await wait(DEBOUNCE_MS);
-    type("Email", "");
-    await wait(DEBOUNCE_MS);
-
-    expect(checks).toHaveLength(0);
-    expect(screen.queryByText("Checking…")).toBeNull();
-  });
-
-  it("submit waits for a check that is still running, then sends", async () => {
-    const { checks, onSubmit } = renderAsyncForm();
-
-    type("Email", "free@example.com");
-    pressSubmit();
-    await wait(DEBOUNCE_MS);
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(getSubmitButton()).toHaveAttribute("aria-busy", "true");
-
-    checks[0].answer(null);
-    await flush();
-
-    expect(onSubmit).toHaveBeenCalledWith({ email: "free@example.com", city: "" });
-  });
-
-  it("submit does not send when the check it waited for finds an error", async () => {
-    const { checks, onSubmit } = renderAsyncForm();
-
-    type("Email", "taken@example.com");
-    pressSubmit();
-    await wait(DEBOUNCE_MS);
-    checks[0].answer("This address is taken.");
-    await flush();
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(getSummaryTexts()).toEqual(["This address is taken."]);
-    expect(getControl("Email")).toHaveFocus();
-    expect(getSubmitButton()).toHaveAttribute("aria-busy", "false");
-  });
-
-  it("submit does not send while an error of the server is still on the field", async () => {
-    const { checks, onSubmit } = renderAsyncForm();
-
-    type("Email", "taken@example.com");
-    await wait(DEBOUNCE_MS);
-    checks[0].answer("This address is taken.");
-    await flush();
-    pressSubmit();
-    await flush();
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(getSummaryTexts()).toEqual(["This address is taken."]);
-  });
-
-  it("does not blame the user when the check itself fails", async () => {
-    const { checks, onSubmit } = renderAsyncForm();
-
-    type("Email", "a@example.com");
-    await wait(DEBOUNCE_MS);
-    checks[0].fail();
-    await flush();
-
-    expect(getControl("Email")).not.toHaveAttribute("aria-invalid");
-    expect(screen.queryByText("Checking…")).toBeNull();
-
-    pressSubmit();
-    await flush();
-
-    expect(onSubmit).toHaveBeenCalledTimes(1);
-  });
-
-  it("cancels the running check when the form is removed", async () => {
-    const { checks, unmount } = renderAsyncForm();
-
-    type("Email", "a@example.com");
-    await wait(DEBOUNCE_MS);
-    unmount();
-
-    expect(checks[0].signal.aborted).toBe(true);
-  });
-
-  it("does not ask the server at all when the form is removed during the wait", async () => {
-    const { checks, unmount } = renderAsyncForm();
-
-    type("Email", "a@example.com");
-    unmount();
-    await wait(DEBOUNCE_MS);
-
-    expect(checks).toHaveLength(0);
-  });
-
-  it("warns one time and does not block when the schema names a check that nobody gave", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { onSubmit } = renderForm(vi.fn(), asyncSchema);
-
-    type("Email", "a@example.com");
-    type("Email", "b@example.com");
-    pressSubmit();
-    await flush();
-
-    expect(consoleError).toHaveBeenCalledTimes(1);
-    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("emailIsFree"));
-    expect(onSubmit).toHaveBeenCalledTimes(1);
-    consoleError.mockRestore();
   });
 });
 
@@ -1367,83 +1095,6 @@ describe("Form: the error summary", () => {
     fireEvent.click(link);
 
     expect(getControl("I agree")).toHaveFocus();
-  });
-});
-
-describe("Form: field types from the page", () => {
-  function StarsControl({ value, onChange, controlProps }: ControlProps) {
-    return (
-      <input
-        {...controlProps}
-        type="range"
-        min={0}
-        max={5}
-        value={Number(value)}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    );
-  }
-
-  function ShoutingInput({ value, onChange, controlProps }: ControlProps) {
-    return (
-      <input
-        {...controlProps}
-        data-shouting="yes"
-        value={String(value)}
-        onChange={(event) => onChange(event.target.value.toUpperCase())}
-      />
-    );
-  }
-
-  const starsSchema: FormSchema = {
-    id: "stars",
-    fields: [
-      { name: "city", label: "City", type: "text" },
-      {
-        name: "stars",
-        label: "Stars",
-        type: "stars",
-        defaultValue: 0,
-        rules: [{ type: "min", value: 1, message: "Give at least one star." }],
-      },
-    ],
-  };
-
-  it("draws a type that the page added, with label, rules and submit like any field", async () => {
-    const { onSubmit } = renderForm(vi.fn(), starsSchema, {
-      fieldTypes: { stars: { component: StarsControl } },
-    });
-
-    expect(screen.getByRole("slider", { name: "Stars" })).toBeInTheDocument();
-
-    pressSubmit();
-    expect(getSummaryTexts()).toEqual(["Give at least one star."]);
-    expect(screen.getByRole("slider")).toHaveFocus();
-
-    fireEvent.change(screen.getByRole("slider"), { target: { value: "4" } });
-    pressSubmit();
-    await flush();
-
-    expect(onSubmit).toHaveBeenCalledWith({ city: "", stars: 4 });
-  });
-
-  it("shows “unsupported” for that type when the page did not add it", () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    renderForm(vi.fn(), starsSchema);
-
-    expect(screen.getByText("Unsupported field type: stars")).toBeVisible();
-    consoleError.mockRestore();
-  });
-
-  it("lets the page replace a built-in type", () => {
-    renderForm(vi.fn(), starsSchema, {
-      fieldTypes: { text: { component: ShoutingInput }, stars: { component: StarsControl } },
-    });
-
-    type("City", "pune");
-
-    expect(getControl("City")).toHaveAttribute("data-shouting", "yes");
-    expect(getControl("City")).toHaveValue("PUNE");
   });
 });
 

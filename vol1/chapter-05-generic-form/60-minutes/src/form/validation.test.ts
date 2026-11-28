@@ -12,6 +12,7 @@ import {
   getSubmitValues,
   isVisible,
   matchesCondition,
+  readSubmitErrors,
   validateField as validateFieldAsData,
   validateForm as validateFormAsData,
 } from "./validation";
@@ -206,10 +207,8 @@ describe("errors as data", () => {
     expect(getErrorText(makeField(), error, DEFAULT_MESSAGES)).toBe("Not on the list.");
   });
 
-  it("still has a text for a server error that came without one", () => {
-    expect(getErrorText(makeField(), { type: "async" }, DEFAULT_MESSAGES)).toBe(
-      "City is not in the right format.",
-    );
+  it("gives an empty text for a server error that came without one, and does not crash", () => {
+    expect(getErrorText(makeField(), { type: "server" }, DEFAULT_MESSAGES)).toBe("");
   });
 });
 
@@ -563,5 +562,35 @@ describe("getSubmitValues", () => {
       kind: "",
       years: "",
     });
+  });
+});
+
+describe("readSubmitErrors", () => {
+  const values = { kind: "contractor", company: "Acme", years: "" };
+
+  it("turns the field errors of the server into errors of the fields on screen", () => {
+    const reason = { fieldErrors: { company: "Not on the list." }, formError: "Try later." };
+
+    expect(readSubmitErrors(contractorSchema, values, reason)).toEqual({
+      errors: { company: { type: "server", message: "Not on the list." } },
+      formError: "Try later.",
+    });
+  });
+
+  it("leaves out an error for a field that is hidden, or that is not in the schema", () => {
+    const reason = { fieldErrors: { company: "Not on the list.", other: "?" } };
+
+    expect(readSubmitErrors(contractorSchema, { ...values, kind: "" }, reason).errors).toEqual({});
+  });
+
+  it("finds nothing in a reason that is not an object, or that has parts of the wrong kind", () => {
+    const nothing = { errors: {}, formError: undefined };
+
+    for (const reason of [undefined, null, "500", new Error("500"), { fieldErrors: "x" }]) {
+      expect(readSubmitErrors(contractorSchema, values, reason)).toEqual(nothing);
+    }
+    expect(
+      readSubmitErrors(contractorSchema, values, { fieldErrors: { company: 7 }, formError: 500 }),
+    ).toEqual(nothing);
   });
 });

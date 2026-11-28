@@ -185,53 +185,20 @@ kbd {
   font-weight: 400;
 }
 
-.field--checkbox .field__help,
-.field--checkbox .field__error {
+/* The help text and the error text of a tick box sit under its label. */
+.field--checkbox > div {
   grid-column: 2;
 }
 
 .field__help,
 .field__error,
-.field__checking,
 .field__renders {
   margin: 6px 0 0;
   font-size: 0.875rem;
 }
 
-.field__checking,
 .field__renders {
   color: var(--color-muted);
-}
-
-/* Radio buttons of one field, one under the other. */
-.field__choices {
-  display: grid;
-  gap: 4px;
-}
-
-.field__choice {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  /* Tall enough for a finger. */
-  min-height: 44px;
-}
-
-.field__choice input:focus-visible {
-  outline: 3px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
 }
 
 .field__help {

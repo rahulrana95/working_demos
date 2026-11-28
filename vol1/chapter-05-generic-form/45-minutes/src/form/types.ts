@@ -23,11 +23,6 @@ export interface Condition {
   equals: FieldValue;
 }
 
-export interface FieldOption {
-  value: string;
-  label: string;
-}
-
 export interface FieldSchema {
   /** The key of the field in the values. It must be unique in the form. */
   name: string;
@@ -40,7 +35,7 @@ export interface FieldSchema {
   /** The browser's autofill hint, like "name" or "email". It goes on the control as it is. */
   autoComplete?: string;
   /** The choices of a select. */
-  options?: FieldOption[];
+  options?: { value: string; label: string }[];
   /** Checked in this order. The first rule that fails gives the error. */
   rules?: Rule[];
   visibleWhen?: Condition;

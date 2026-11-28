@@ -1,25 +1,28 @@
 /*
- * PART OF THE INTERVIEW: yes (about 7 minutes).
- * The form creates the store, loops over the schema, and draws the parts that
- * belong to the whole form: the error summary and the submit button.
+ * PART OF THE INTERVIEW: yes (about 13 minutes).
+ * The form creates the store, loops over the schema, and draws the error
+ * summary and the submit button. The field and the summary are the ones of
+ * the 45-minute answer. The new parts are `useStoreValue`, `memo` and the
+ * links in the summary.
  *
- * The form itself does not listen to the values. Only the small parts below
- * do, so a key press never draws the whole form again.
+ * Why it holds at scale: the form does not listen to the values. Each field
+ * listens to the store by itself and reads only what it shows. So a key
+ * press in one field draws that field again, and no other.
  *
  * The form keeps its own state. To start again with empty values, or to show
  * another schema, give the form a new `key`.
  */
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useId, useMemo, useState, useSyncExternalStore } from "react";
 import type { FormEvent, MouseEvent } from "react";
-import { Field, useStoreValue } from "./Field";
-import { BUILT_IN_FIELD_TYPES, getFieldType } from "./fields";
-import type { FieldTypeDefinition } from "./fields";
+import { getControl } from "./fields";
 import { createFormStore } from "./formStore";
-import type { FormStore, FormStoreOptions } from "./formStore";
+import type { FormState, FormStore } from "./formStore";
 import { DEFAULT_MESSAGES } from "./messages";
 import type { FormMessages } from "./messages";
-import type { AsyncValidator, FormSchema, SubmitHandler } from "./types";
+import { RenderCount } from "./RenderCount";
+import type { FieldSchema, FormSchema, SubmitHandler } from "./types";
 import { getErrorText, isVisible } from "./validation";
+import { warnOnce } from "./warnOnce";
 
 export interface FormProps {
   /** The definition of the form. It is plain data and can come from a server. */
@@ -29,119 +32,75 @@ export interface FormProps {
    * `{ fieldErrors, formError }` to show what the server said.
    */
   onSubmit: SubmitHandler;
-  /** The functions behind the `asyncRule` names in the schema. */
-  asyncValidators?: Record<string, AsyncValidator>;
-  /** How long the user must stop typing before a server check starts. */
-  asyncDebounceMs?: number;
-  /** More field types, or other components for the built-in ones. Keep the same object between renders. */
-  fieldTypes?: Record<string, FieldTypeDefinition>;
   /** Other texts, for example a translation. A text that is left out stays in English. Keep the same object between renders. */
   messages?: Partial<FormMessages>;
-  /** Debug help: each field shows how many times it was drawn. */
-  showRenderCounts?: boolean;
 }
 
-const NO_VALIDATORS: Record<string, AsyncValidator> = {};
+/** What every part of the form gets. `formId` starts every id, so two forms on a page do not clash. */
+type PartProps = { store: FormStore; messages: FormMessages; formId: string };
 
-export function Form({
-  schema,
-  onSubmit,
-  asyncValidators = NO_VALIDATORS,
-  asyncDebounceMs = 300,
-  fieldTypes,
-  messages: customMessages,
-  showRenderCounts = false,
-}: FormProps) {
+/**
+ * Reads one thing from the store. The component is drawn again only when
+ * that thing changes. The selector must return a text, a number, a boolean or
+ * an object that is kept in the state, because React compares with `Object.is`.
+ */
+function useStoreValue<T>(store: FormStore, select: (state: FormState) => T): T {
+  return useSyncExternalStore(store.subscribe, () => select(store.getState()));
+}
+
+export function Form({ schema, onSubmit, messages: customMessages }: FormProps) {
   const formId = useId();
-
-  // These two objects are props of every field. useMemo keeps them the same
-  // between renders, so `memo` on the field can skip the fields.
+  // This object is a prop of every field. useMemo keeps it the same between
+  // renders, so `memo` on the field can skip the fields.
   const messages = useMemo(() => ({ ...DEFAULT_MESSAGES, ...customMessages }), [customMessages]);
-  const allFieldTypes = useMemo(() => ({ ...BUILT_IN_FIELD_TYPES, ...fieldTypes }), [fieldTypes]);
-
-  // The store lives as long as the form, but it must always call the newest
-  // `onSubmit` and read the newest messages. So it reads them from a ref,
-  // and an effect puts the newest ones in the ref after every render.
-  const options: FormStoreOptions = {
-    onSubmit,
-    asyncValidators,
-    debounceMs: asyncDebounceMs,
-    focusField: (name) => document.getElementById(`${formId}-${name}`)?.focus(),
-  };
-  const optionsRef = useRef(options);
-  useEffect(() => {
-    optionsRef.current = options;
-  });
 
   // useState with a function creates the store once, on the first render.
   const [store] = useState(() => {
     // A field we cannot draw cannot be filled in, so it must not be checked or sent.
-    const knownFields = schema.fields.filter(
-      (field) => getFieldType(allFieldTypes, field.type) !== undefined,
-    );
-    return createFormStore({ ...schema, fields: knownFields }, () => optionsRef.current);
+    const knownFields = schema.fields.filter((field) => getControl(field.type) !== undefined);
+    return createFormStore({ ...schema, fields: knownFields });
   });
-
-  useEffect(() => {
-    store.connect();
-    return () => store.disconnect();
-  }, [store]);
+  // This changes only around a submit, so it does not draw the form again on a key press.
+  const isSubmitting = useStoreValue(store, (state) => state.isSubmitting);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     // Without this the browser loads the page again.
     event.preventDefault();
-    void store.submit();
+    void store.submit(onSubmit, (name) => document.getElementById(`${formId}-${name}`)?.focus());
   }
 
   return (
-    <form
-      className="form"
-      // The browser has its own error bubbles. They would fight with our messages.
-      noValidate
-      aria-label={schema.title}
-      onSubmit={handleSubmit}
-    >
+    // `noValidate` turns off the error bubbles of the browser. They would fight with our messages.
+    <form className="form" noValidate aria-label={schema.title} onSubmit={handleSubmit}>
       {schema.title !== undefined && <h2 className="form__title">{schema.title}</h2>}
-
       <ErrorSummary schema={schema} store={store} messages={messages} formId={formId} />
-
       {schema.fields.map((field) => (
-        <Field
-          key={field.name}
-          field={field}
-          definition={getFieldType(allFieldTypes, field.type)}
-          store={store}
-          messages={messages}
-          formId={formId}
-          showRenderCount={showRenderCounts}
-        />
+        <Field key={field.name} field={field} store={store} messages={messages} formId={formId} />
       ))}
-
-      <SubmitButton store={store} label={schema.submitLabel} messages={messages} />
+      {/*
+        The button is never disabled. A disabled button cannot tell the user
+        what is wrong. A second press while we send is ignored in the store.
+      */}
+      <button className="form__submit" type="submit" aria-busy={isSubmitting}>
+        {isSubmitting ? messages.submitting : (schema.submitLabel ?? messages.submit)}
+      </button>
     </form>
   );
 }
 
-interface ErrorSummaryProps {
-  schema: FormSchema;
-  store: FormStore;
-  messages: FormMessages;
-  formId: string;
-}
-
-function ErrorSummary({ schema, store, messages, formId }: ErrorSummaryProps) {
-  const summaryErrors = useStoreValue(store, (state) => state.summaryErrors);
-  const submitError = useStoreValue(store, (state) => state.submitError);
+function ErrorSummary({ schema, store, messages, formId }: PartProps & { schema: FormSchema }) {
+  const summaryErrors = useStoreValue(store, (state) => state.summaryErrors) ?? {};
   const values = useStoreValue(store, (state) => state.values);
+  const failure = useStoreValue(store, (state) => state.failure);
   // A field that is hidden now leaves the summary, or its link would lead nowhere.
   const invalidFields = schema.fields.filter(
     (field) => summaryErrors[field.name] !== undefined && isVisible(field, values),
   );
 
-  function focusField(event: MouseEvent<HTMLAnchorElement>, name: string) {
+  function followLink(event: MouseEvent, id: string) {
     // The link alone would only scroll. A keyboard user needs the focus in the field.
     event.preventDefault();
-    document.getElementById(`${formId}-${name}`)?.focus();
+    document.getElementById(id)?.focus();
   }
 
   return (
@@ -156,7 +115,7 @@ function ErrorSummary({ schema, store, messages, formId }: ErrorSummaryProps) {
               <li key={field.name}>
                 <a
                   href={`#${formId}-${field.name}`}
-                  onClick={(event) => focusField(event, field.name)}
+                  onClick={(event) => followLink(event, `${formId}-${field.name}`)}
                 >
                   {/* The filter above kept only fields with an error, so the "!" is safe. */}
                   {getErrorText(field, summaryErrors[field.name]!, messages)}
@@ -166,27 +125,72 @@ function ErrorSummary({ schema, store, messages, formId }: ErrorSummaryProps) {
           </ul>
         </>
       )}
-      {submitError !== null && (
-        <p className="form__alert-title">{submitError.message ?? messages.submitFailed}</p>
-      )}
+      {failure && <p className="form__alert-title">{failure.message ?? messages.submitFailed}</p>}
     </div>
   );
 }
 
-interface SubmitButtonProps {
-  store: FormStore;
-  label: string | undefined;
-  messages: FormMessages;
-}
+function FieldInner({ field, store, messages, formId }: PartProps & { field: FieldSchema }) {
+  const isShown = useStoreValue(store, (state) => isVisible(field, state.values));
+  const value = useStoreValue(store, (state) => state.values[field.name] ?? "");
+  const fieldError = useStoreValue(store, (state) => state.errors[field.name]);
 
-function SubmitButton({ store, label, messages }: SubmitButtonProps) {
-  const isSubmitting = useStoreValue(store, (state) => state.isSubmitting);
+  const Control = getControl(field.type);
+  useEffect(() => {
+    if (Control === undefined) {
+      warnOnce(`Form schema error: no component for the field type "${field.type}".`);
+    }
+  }, [Control, field.type]);
+
+  if (!isShown) return null;
+  // A box in place of a field whose type we do not know. The other fields still work.
+  if (Control === undefined) {
+    return <p className="field field__unsupported">{messages.unsupportedField(field.type)}</p>;
+  }
+
+  const id = `${formId}-${field.name}`;
+  const descriptionId = `${id}-description`;
+  // The text is chosen here, so the error changes language together with `messages`.
+  const error = fieldError && getErrorText(field, fieldError, messages);
 
   return (
-    // The button is never disabled. A disabled button cannot tell the user
-    // what is wrong. A second press while we send is ignored in the store.
-    <button className="form__submit" type="submit" aria-busy={isSubmitting}>
-      {isSubmitting ? messages.submitting : (label ?? messages.submit)}
-    </button>
+    <div className={`field field--${field.type}${error ? " is-invalid" : ""}`}>
+      <label className="field__label" htmlFor={id}>
+        {field.label}
+        {/* A screen reader already says "required", because of the attribute on the control. */}
+        {field.required && <span aria-hidden="true"> {messages.requiredMark}</span>}
+      </label>
+      <Control
+        field={field}
+        value={value}
+        onChange={(newValue) => store.setValue(field.name, newValue)}
+        shared={{
+          id,
+          name: field.name,
+          required: field.required,
+          // Said again for screen readers, because the form has `noValidate`.
+          "aria-required": field.required,
+          autoComplete: field.autoComplete,
+          "aria-invalid": error ? true : undefined,
+          // A screen reader reads the help and the error after the label.
+          "aria-describedby": field.helpText || error ? descriptionId : undefined,
+          onBlur: () => store.touch(field.name),
+        }}
+        messages={messages}
+      />
+      <div id={descriptionId}>
+        {field.helpText && <p className="field__help">{field.helpText}</p>}
+        {error && <p className="field__error">{error}</p>}
+      </div>
+      {/* Debug help. It draws nothing until the demo page or a test turns it on. */}
+      <RenderCount />
+    </div>
   );
 }
+
+/**
+ * `memo` stops a field from being drawn again when the form is drawn again
+ * for a reason that does not change this field. Without it, a new `onSubmit`
+ * from the page would draw all 300 fields.
+ */
+const Field = memo(FieldInner);

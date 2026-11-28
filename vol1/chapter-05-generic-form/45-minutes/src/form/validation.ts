@@ -10,6 +10,16 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Digits with an optional minus sign and decimal point. "1e5" and "abc" are not numbers here. */
 const NUMBER_PATTERN = /^-?\d+(\.\d+)?$/;
 
+/** The default error text of each rule. A rule in the schema can bring its own `message`. */
+const RULE_TEXTS: Record<Rule["type"], (label: string, limit: unknown) => string> = {
+  minLength: (label, limit) => `${label} must have at least ${limit} characters.`,
+  maxLength: (label, limit) => `${label} must have at most ${limit} characters.`,
+  min: (label, limit) => `${label} must be ${limit} or more.`,
+  max: (label, limit) => `${label} must be ${limit} or less.`,
+  email: (label) => `${label} must be an email address, like name@example.com.`,
+  pattern: (label) => `${label} is not in the right format.`,
+};
+
 /** A field is on screen when it has no condition, or when its condition holds. */
 export function isVisible(field: FieldSchema, values: FormValues): boolean {
   const condition = field.visibleWhen;
@@ -18,14 +28,10 @@ export function isVisible(field: FieldSchema, values: FormValues): boolean {
 
 /** The value every field starts with. The schema can give its own in `defaultValue`. */
 export function getInitialValues(schema: FormSchema): FormValues {
-  const values: FormValues = {};
-
-  for (const field of schema.fields) {
-    // A number field starts as an empty text, not as 0, so the box can be empty.
-    values[field.name] = field.defaultValue ?? (field.type === "checkbox" ? false : "");
-  }
-
-  return values;
+  // A number field starts as an empty text, not as 0, so the box can be empty.
+  const getStartValue = (field: FieldSchema) =>
+    field.defaultValue ?? (field.type === "checkbox" ? false : "");
+  return Object.fromEntries(schema.fields.map((field) => [field.name, getStartValue(field)]));
 }
 
 /** Empty means: no text, only spaces, or a tick box that is not ticked. */
@@ -43,73 +49,41 @@ function matchesPattern(source: string, text: string): boolean {
   }
 }
 
-/** Returns the default error text of one rule, or null when the value passes it. */
-function checkRule(rule: Rule, value: FieldValue, label: string): string | null {
+function passesRule(rule: Rule, value: FieldValue): boolean {
   const text = String(value);
-
-  switch (rule.type) {
-    case "minLength":
-      return text.length >= rule.value
-        ? null
-        : `${label} must have at least ${rule.value} characters.`;
-    case "maxLength":
-      return text.length <= rule.value
-        ? null
-        : `${label} must have at most ${rule.value} characters.`;
-    // Number("9") is smaller than 50. The text "9" is not smaller than the text "50".
-    case "min":
-      return Number(value) >= rule.value ? null : `${label} must be ${rule.value} or more.`;
-    case "max":
-      return Number(value) <= rule.value ? null : `${label} must be ${rule.value} or less.`;
-    case "email":
-      return EMAIL_PATTERN.test(text)
-        ? null
-        : `${label} must be an email address, like name@example.com.`;
-    case "pattern":
-      return matchesPattern(rule.value, text) ? null : `${label} is not in the right format.`;
-    default:
-      // A rule type we do not know, from a newer server. It must not block the user.
-      return null;
-  }
+  if (rule.type === "minLength") return text.length >= rule.value;
+  if (rule.type === "maxLength") return text.length <= rule.value;
+  // Number("9") is smaller than 50. The text "9" is not smaller than the text "50".
+  if (rule.type === "min") return Number(value) >= rule.value;
+  if (rule.type === "max") return Number(value) <= rule.value;
+  if (rule.type === "email") return EMAIL_PATTERN.test(text);
+  if (rule.type === "pattern") return matchesPattern(rule.value, text);
+  // A rule type we do not know, from a newer server. It must not block the user.
+  return true;
 }
 
 /** Returns the error text of one field, or null when the value is fine. */
 export function validateField(field: FieldSchema, value: FieldValue): string | null {
   // An empty field fails only when it is required. No other rule looks at it.
-  if (isEmpty(value)) {
-    return field.required ? `${field.label} is required.` : null;
-  }
-
+  if (isEmpty(value)) return field.required ? `${field.label} is required.` : null;
   // A number field is a text box, so the user can type anything into it.
   if (field.type === "number" && !NUMBER_PATTERN.test(String(value).trim())) {
     return `${field.label} must be a number.`;
   }
 
-  for (const rule of field.rules ?? []) {
-    const error = checkRule(rule, value, field.label);
-    if (error !== null) {
-      return rule.message ?? error;
-    }
-  }
-
-  return null;
+  const failedRule = (field.rules ?? []).find((rule) => !passesRule(rule, value));
+  if (failedRule === undefined) return null;
+  const limit = "value" in failedRule ? failedRule.value : undefined;
+  return failedRule.message ?? RULE_TEXTS[failedRule.type](field.label, limit);
 }
 
 /** Checks every field that is on screen. A hidden field can never block the form. */
 export function validateForm(schema: FormSchema, values: FormValues): FormErrors {
   const errors: FormErrors = {};
-
   for (const field of schema.fields) {
-    if (!isVisible(field, values)) {
-      continue;
-    }
-
-    const error = validateField(field, values[field.name] ?? "");
-    if (error !== null) {
-      errors[field.name] = error;
-    }
+    const error = isVisible(field, values) ? validateField(field, values[field.name] ?? "") : null;
+    if (error !== null) errors[field.name] = error;
   }
-
   return errors;
 }
 
@@ -120,13 +94,9 @@ export function validateForm(schema: FormSchema, values: FormValues): FormErrors
  */
 export function getSubmitValues(schema: FormSchema, values: FormValues): FormValues {
   const submitValues: FormValues = {};
-
-  for (const field of schema.fields) {
-    if (isVisible(field, values)) {
-      const value = values[field.name] ?? "";
-      submitValues[field.name] = field.type === "number" && !isEmpty(value) ? Number(value) : value;
-    }
+  for (const field of schema.fields.filter((candidate) => isVisible(candidate, values))) {
+    const value = values[field.name] ?? "";
+    submitValues[field.name] = field.type === "number" && !isEmpty(value) ? Number(value) : value;
   }
-
   return submitValues;
 }

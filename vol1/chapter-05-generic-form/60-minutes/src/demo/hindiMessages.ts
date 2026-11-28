@@ -17,7 +17,6 @@ export const HINDI_MESSAGES: FormMessages = {
   pattern: (label) => `${label}: इसे सही तरीके से लिखें।`,
   requiredMark: "(ज़रूरी)",
   selectPlaceholder: "चुनें…",
-  checking: "जाँच हो रही है…",
   // "गलतियाँ: 3" needs no singular and plural form.
   summaryTitle: (errorCount) => `गलतियाँ: ${errorCount}`,
   submit: "भेजें",

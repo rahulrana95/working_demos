@@ -12,7 +12,6 @@ export {
 } from "./validation";
 export type {
   Condition,
-  FieldOption,
   FieldSchema,
   FieldType,
   FieldValue,

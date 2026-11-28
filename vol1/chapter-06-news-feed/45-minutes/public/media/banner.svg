@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900">
+  <rect width="1600" height="900" fill="#b5523b" />
+  <circle cx="1120" cy="315" r="162" fill="#f0d9b5" />
+  <path d="M0 900 L560 405 L960 675 L1280 495 L1600 720 L1600 900 Z" fill="#f0d9b5" opacity="0.6" />
+  <text x="800" y="855" font-family="sans-serif" font-size="45" text-anchor="middle" fill="#ffffff">1600 x 900</text>
+</svg>
