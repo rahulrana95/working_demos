@@ -1,0 +1,383 @@
+/* NOT PART OF THE INTERVIEW. Styles for the demo page and for the calendar. */
+:root {
+  --color-text: #1c1f23;
+  --color-muted: #5b6470;
+  --color-border: #c5ccd6;
+  --color-accent: #1a56db;
+  --color-accent-soft: #e6eefc;
+  --color-surface: #ffffff;
+  --color-page: #f5f6f8;
+  --color-danger: #b42318;
+  --radius: 8px;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.page h1 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+}
+
+.page__intro {
+  margin: 0 0 16px;
+  color: var(--color-muted);
+}
+
+.page__nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.page__nav label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page__nav select {
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  font-size: max(16px, 1em);
+}
+
+.page__nav button[aria-pressed="true"] {
+  border-color: var(--color-text);
+  border-width: 2px;
+  font-weight: 600;
+}
+
+.page__date {
+  margin: 0 0 16px;
+  font-size: 1.125rem;
+}
+
+.page__nav button,
+.panel button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.page__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+
+@media (min-width: 800px) {
+  .page__columns {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    align-items: start;
+  }
+}
+
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+}
+
+.panel {
+  position: sticky;
+  top: 16px;
+  padding: 16px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-size: 0.9375rem;
+}
+
+.panel button {
+  width: 100%;
+  margin-block-end: 8px;
+  text-align: start;
+}
+
+.panel p {
+  margin: 12px 0 0;
+}
+
+.panel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 8px;
+  cursor: pointer;
+}
+
+.panel__log {
+  margin: 8px 0 0;
+  padding-inline-start: 24px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+}
+
+.panel__hint {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+/* ---------- Calendar ---------- */
+
+.calendar {
+  position: relative;
+  /* A week on a phone is wider than the screen. It scrolls sideways. */
+  overflow-x: auto;
+}
+
+.calendar > p {
+  margin: 0 0 8px;
+  color: var(--color-muted);
+}
+
+/* An error has a border, so it is not marked by colour alone. */
+.calendar [role="alert"] {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-danger);
+  border-inline-start-width: 4px;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-danger);
+}
+
+.calendar__days {
+  position: relative;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+/* Seven columns need room. */
+.calendar__days:has([role="columnheader"]:nth-child(7)) {
+  min-width: 760px;
+}
+
+.calendar [role="row"] {
+  display: flex;
+}
+
+.calendar [role="columnheader"],
+.calendar [role="gridcell"] {
+  flex: 1 1 0;
+  min-width: 0;
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.calendar [role="columnheader"]:first-child,
+.calendar [role="gridcell"]:first-child {
+  border-inline-start-color: transparent;
+}
+
+.calendar [role="columnheader"] {
+  /* The same number as the top of .calendar__lists below. */
+  height: 32px;
+  padding: 4px 8px;
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The lists of events lie over the grid of slots, one list over each day. */
+.calendar__lists {
+  position: absolute;
+  inset-block: 32px 0;
+  inset-inline: 0;
+  z-index: 1;
+  display: flex;
+  /* Clicks between the events fall through to the slots. */
+  pointer-events: none;
+}
+
+/* The strip on the start side shows the hour of each slot. The strip on the
+   end side is always free, so a slot can be clicked even in a full hour. */
+.calendar ol {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  margin-inline: 52px 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.calendar li {
+  position: absolute;
+  padding: 1px;
+  pointer-events: auto;
+}
+
+.calendar li > button {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 1px 4px;
+  overflow: hidden;
+  border: 1px solid var(--color-accent);
+  border-inline-start-width: 4px;
+  border-radius: 4px;
+  background: var(--color-accent-soft);
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  text-align: start;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.calendar [role="gridcell"] > button {
+  display: block;
+  width: 100%;
+  /* One hour. The same number as HOUR_HEIGHT in layoutDay.ts. Taller than 44px, for a finger. */
+  height: 48px;
+  padding: 2px 4px;
+  border: 0;
+  border-block-start: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.6875rem;
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.calendar [role="gridcell"] > button:hover:enabled {
+  background: var(--color-page);
+}
+
+/* A day of 23 hours has no slot in the last row of a week. */
+.calendar [role="gridcell"] > button:disabled {
+  border-block-start-style: dashed;
+  cursor: default;
+}
+
+/* Focus is a real outline, drawn inside the box so the next box cannot hide it. */
+.calendar button:focus-visible,
+.calendar input:focus-visible {
+  outline: 3px solid var(--color-text);
+  outline-offset: -3px;
+}
+
+.calendar form {
+  position: sticky;
+  inset-block-start: 8px;
+  inset-inline-start: 0;
+  z-index: 2;
+  display: grid;
+  gap: 12px;
+  margin-block-end: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+@media (min-width: 560px) {
+  .calendar form {
+    grid-template-columns: repeat(3, auto) 1fr;
+    align-items: end;
+  }
+
+  .calendar form label,
+  .calendar form [role="alert"] {
+    grid-column: 1 / -1;
+  }
+}
+
+.calendar form label {
+  display: grid;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.calendar form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  /* Safari on iPhone zooms the page when a focused input has text smaller than 16px. */
+  font-size: max(16px, 1em);
+}
+
+.calendar form button,
+.calendar [role="alert"] button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.calendar form button[type="submit"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.calendar form [role="alert"] {
+  margin: 0;
+}
+
+/* High-contrast mode keeps borders and drops backgrounds. An event box is
+   then still a box, because its edge is a real border. */
+@media (forced-colors: active) {
+  .calendar li > button {
+    border-color: ButtonText;
+  }
+
+  .calendar button:focus-visible,
+  .calendar input:focus-visible {
+    outline-color: Highlight;
+  }
+}

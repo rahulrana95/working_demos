@@ -1,0 +1,309 @@
+/* NOT PART OF THE INTERVIEW. Styles for the demo page and for the calendar. */
+:root {
+  --color-text: #1c1f23;
+  --color-muted: #5b6470;
+  --color-border: #c5ccd6;
+  --color-accent: #1a56db;
+  --color-accent-soft: #e6eefc;
+  --color-surface: #ffffff;
+  --color-page: #f5f6f8;
+  --color-danger: #b42318;
+  --radius: 8px;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.page h1 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+}
+
+.page__intro {
+  margin: 0 0 16px;
+  color: var(--color-muted);
+}
+
+.page__nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.page__nav h2 {
+  margin: 0 0 0 8px;
+  font-size: 1.125rem;
+}
+
+.page__nav button,
+.panel button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.page__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+
+@media (min-width: 800px) {
+  .page__columns {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    align-items: start;
+  }
+}
+
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+}
+
+.panel {
+  position: sticky;
+  top: 16px;
+  padding: 16px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-size: 0.9375rem;
+}
+
+.panel p {
+  margin: 12px 0 0;
+}
+
+.panel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 8px;
+  cursor: pointer;
+}
+
+.panel__log {
+  margin: 8px 0 0;
+  padding-left: 24px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+}
+
+.panel__hint {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+/* ---------- Calendar ---------- */
+
+.calendar {
+  position: relative;
+}
+
+.calendar > p {
+  margin: 0 0 8px;
+  color: var(--color-muted);
+}
+
+/* An error has a border, so it is not marked by colour alone. */
+.calendar [role="alert"] {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-danger);
+  border-inline-start-width: 4px;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-danger);
+}
+
+.calendar__day {
+  position: relative;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+/* The list of events lies over the grid of slots. The strip on the start
+   side shows the hour of each slot. The strip on the end side is always free,
+   so a slot can be clicked even in a full hour. */
+.calendar ol {
+  position: absolute;
+  inset-block: 0;
+  inset-inline: 72px 16px;
+  z-index: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Clicks between the events fall through to the slots. */
+  pointer-events: none;
+}
+
+.calendar li {
+  position: absolute;
+  padding: 1px;
+  pointer-events: auto;
+}
+
+.calendar li > button {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 1px 6px;
+  overflow: hidden;
+  border: 1px solid var(--color-accent);
+  border-inline-start-width: 4px;
+  border-radius: 4px;
+  background: var(--color-accent-soft);
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  text-align: start;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.calendar [role="gridcell"] > button {
+  display: block;
+  width: 100%;
+  /* One hour. The same number as HOUR_HEIGHT in layoutDay.ts. Taller than 44px, for a finger. */
+  height: 48px;
+  padding: 2px 8px;
+  border: 0;
+  border-block-start: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.calendar [role="row"]:first-child button {
+  border-block-start-color: transparent;
+}
+
+.calendar [role="gridcell"] > button:hover {
+  background: var(--color-page);
+}
+
+/* Focus is a real outline, drawn inside the box so the next box cannot hide it. */
+.calendar button:focus-visible,
+.calendar input:focus-visible {
+  outline: 3px solid var(--color-text);
+  outline-offset: -3px;
+}
+
+.calendar form {
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+@media (min-width: 560px) {
+  .calendar form {
+    grid-template-columns: repeat(3, auto) 1fr;
+    align-items: end;
+  }
+
+  .calendar form label,
+  .calendar form [role="alert"] {
+    grid-column: 1 / -1;
+  }
+}
+
+.calendar form label {
+  display: grid;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.calendar form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  /* Safari on iPhone zooms the page when a focused input has text smaller than 16px. */
+  font-size: max(16px, 1em);
+}
+
+.calendar form button,
+.calendar [role="alert"] button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.calendar form button[type="submit"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.calendar form [role="alert"] {
+  margin: 0;
+}
+
+/* High-contrast mode keeps borders and drops backgrounds. An event box is
+   then still a box, because its edge is a real border. */
+@media (forced-colors: active) {
+  .calendar li > button {
+    border-color: ButtonText;
+  }
+
+  .calendar button:focus-visible,
+  .calendar input:focus-visible {
+    outline-color: Highlight;
+  }
+}
