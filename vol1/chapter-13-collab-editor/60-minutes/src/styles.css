@@ -1,0 +1,139 @@
+/* NOT PART OF THE INTERVIEW. Styles for the demo page. */
+:root {
+  --color-text: #1c1f23;
+  --color-muted: #5b6470;
+  --color-border: #7b8794;
+  --color-accent: #1a56db;
+  --color-surface: #ffffff;
+  --color-page: #f5f6f8;
+  --radius: 8px;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-inline-size: 960px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.page h1 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+}
+
+.page__intro {
+  margin: 0 0 24px;
+  color: var(--color-muted);
+}
+
+.page__editors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.side__control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 44px;
+  margin-block-start: 8px;
+}
+
+.side__control input[type="range"] {
+  flex: 1;
+  min-block-size: 44px;
+}
+
+.side__control input[type="checkbox"] {
+  inline-size: 24px;
+  block-size: 24px;
+}
+
+.side__numbers {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+}
+
+.panel {
+  margin-block-start: 24px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.panel p {
+  margin: 0 0 8px;
+}
+
+.panel__hint {
+  color: var(--color-muted);
+}
+
+.panel__button {
+  min-block-size: 44px;
+  margin-block-end: 8px;
+  padding-inline: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.panel__button:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* ---------- Collaborative editor ---------- */
+
+.collab-editor__label {
+  display: block;
+  margin-block-end: 4px;
+  font-weight: 600;
+}
+
+.collab-editor__input {
+  display: block;
+  inline-size: 100%;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Safari on iPhone zooms the page when a focused field has smaller text. */
+  font-size: max(16px, 1em);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.collab-editor__input:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.collab-editor__status {
+  min-block-size: 1.5em;
+  margin: 4px 0 0;
+  color: var(--color-muted);
+}
