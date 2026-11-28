@@ -1,0 +1,297 @@
+/* NOT PART OF THE INTERVIEW. Styles for the two pages and the demo. */
+:root {
+  --color-text: #1c1f23;
+  --color-muted: #5b6470;
+  --color-border: #c5ccd6;
+  --color-accent: #1a56db;
+  --color-accent-soft: #e6eefc;
+  --color-surface: #ffffff;
+  --color-page: #f5f6f8;
+  --color-danger: #b42318;
+  --radius: 8px;
+  /* The height the cart bar may take. Content and focus stay above it. */
+  --cart-bar-space: 140px;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-page);
+  /* A row that gets the focus is scrolled above the sticky cart bar, not under it. */
+  scroll-padding-block-end: var(--cart-bar-space);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.page h1 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+}
+
+.page__intro {
+  margin: 0 0 24px;
+  color: var(--color-muted);
+}
+
+/* ---------- Ordering ---------- */
+
+.page h1:focus,
+.restaurant:focus {
+  outline: none;
+}
+
+.restaurant h2,
+.order h2 {
+  margin: 24px 0 8px;
+  font-size: 1.125rem;
+}
+
+.menu-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menu-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 12px;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.menu-item__name {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.menu-item__meta,
+.menu-item__description {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.stepper {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+}
+
+.stepper__button {
+  /* A finger needs a target about 44px wide and tall. */
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.stepper__count {
+  min-width: 2ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.button--primary {
+  background: var(--color-accent);
+  color: var(--color-surface);
+}
+
+/*
+ * A button that cannot be used now. The dashed border is a real border, so
+ * the state can be seen without colour, and in high-contrast mode too.
+ */
+.stepper__button[aria-disabled="true"],
+.button[aria-disabled="true"] {
+  border-style: dashed;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.stepper__button:focus-visible,
+.button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* The cart bar stays at the bottom of the screen while the menu scrolls. */
+.cart-bar {
+  position: sticky;
+  inset-block-end: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-start: 16px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.cart-bar__total {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cart-bar__error {
+  flex-basis: 100%;
+  order: 3;
+  margin: 0;
+  color: var(--color-danger);
+}
+
+.order__status::first-letter,
+.steps__step::first-letter {
+  text-transform: uppercase;
+}
+
+.order__status {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.order__eta,
+.order__reconnecting {
+  margin: 4px 0 0;
+}
+
+.order__reconnecting {
+  padding: 8px 12px;
+  border: 1px dashed var(--color-danger);
+  border-radius: var(--radius);
+  color: var(--color-danger);
+}
+
+.steps {
+  margin: 16px 0;
+  padding-inline-start: 24px;
+}
+
+.steps__step {
+  padding: 6px 8px;
+  /* Every step has a bar. Only the bar of the current step can be seen. */
+  border-inline-start: 4px solid transparent;
+  color: var(--color-muted);
+}
+
+/* A step before the current one is done. The mark says so without colour. */
+.steps__step:has(~ [aria-current="step"])::before {
+  content: "✓ ";
+}
+
+.steps__step[aria-current="step"] {
+  border-inline-start-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+/*
+ * High-contrast mode paints every border, a transparent one too. So there
+ * the bar of a normal step gets the colour of the page, and the bar of the
+ * current step gets the highlight colour.
+ */
+@media (forced-colors: active) {
+  .steps__step {
+    border-inline-start-color: Canvas;
+  }
+
+  .steps__step[aria-current="step"] {
+    border-inline-start-color: Highlight;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Demo panel ---------- */
+
+.panel {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.panel p {
+  margin: 0 0 12px;
+}
+
+.panel__toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+  margin-bottom: 4px;
+}
+
+.panel__log,
+.panel__json {
+  margin: 0 0 12px;
+  max-height: 220px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875rem;
+}
+
+.panel__log {
+  padding-left: 40px;
+}
+
+.panel__json {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.panel__hint {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
